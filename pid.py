@@ -26,19 +26,19 @@ def mussel_system():
 def pid_temp(integral, prev_err):
     temp = read_temperature()
     error = ref_temp - temp
-    integral += error
+    integral += error * wait_seconds
     pterm = kp * error
     iterm = ki * integral
-    dterm = kd * (error - prev_err)
+    dterm = kd * (error - prev_err) / wait_seconds
     control_signal = pterm + dterm + iterm
     return integral, error, control_signal, temp
 
 def pid_od(integral, prev_err):
     od = read_od()
     error = ref_od - od
-    integral += error
+    integral += error * wait_seconds
     pterm = kp * error
     iterm = ki * integral
-    dterm = kd * (error - prev_err)
+    dterm = kd * (error - prev_err) / wait_seconds
     control_signal = pterm + dterm + iterm
     return integral, error, control_signal, od

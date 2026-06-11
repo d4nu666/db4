@@ -12,7 +12,7 @@ def mussel_system():
     errorT = 0.0
     intOD = 0.0
     errorOD = 0.0
-    while(True):
+    while True:
         intT, errorT, control_signal_temp, temp = pid_temp(intT, errorT)
         cooler_pump(control_signal_temp)
 

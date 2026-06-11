@@ -30,8 +30,8 @@ def pid_temp(integral, prev_err):
     pterm = kp * error
     iterm = ki * integral
     dterm = kd * (error - prev_err)
-    pid_sum = pterm + dterm + iterm
-    return integral, error, pid_sum, temp
+    control_signal = pterm + dterm + iterm
+    return integral, error, control_signal, temp
 
 def pid_od(integral, prev_err):
     od = read_od()
@@ -40,5 +40,5 @@ def pid_od(integral, prev_err):
     pterm = kp * error
     iterm = ki * integral
     dterm = kd * (error - prev_err)
-    pid_sum = pterm + dterm + iterm
-    return integral, error, pid_sum, od
+    control_signal = pterm + dterm + iterm
+    return integral, error, control_signal, od

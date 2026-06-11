@@ -5,7 +5,7 @@ sample_input = [16, 17, 18, 19, 18, 18, 19, 17, 18, 19, 17, 18, 18, 19, 18, 19, 
                 19, 17, 16, 17, 16, 17, 17, 18, 19, 19, 19, 19, 18]
 
 kp, ki, kd = 1, 0.5, 0.5
-
+wait_seconds = 1
 
 def mussel_system():
     intT = 0.0
@@ -20,7 +20,7 @@ def mussel_system():
         algae_pump(control_signal_OD)
 
         serverUpload(temp, control_signal_temp, od, control_signal_OD)
-        wait(1)
+        wait(wait_seconds)
 
 
 def pid_temp(integral, prev_err):

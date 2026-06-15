@@ -1,4 +1,4 @@
-from machine import Pin, PWM, ADC, I2C
+from machine import Pin, ADC, I2C
 import time
 import math
 import ssd1306
@@ -9,7 +9,7 @@ import ssd1306
 # =========================
 
 fan_relay = Pin(17, Pin.OUT)    # Relay IN1 = fan
-heat_relay = Pin(16, Pin.OUT)   # Relay IN2 = heating
+cooling_relay = Pin(16, Pin.OUT)   # Relay IN2 = cooling / Peltier
 
 # Relay is ACTIVE LOW:
 # 0 = ON
@@ -99,6 +99,7 @@ def read_rgb_sensor():
         green = tcs_read16(TCS_GDATAL)
         blue = tcs_read16(TCS_BDATAL)
         return red, green, blue, clear
+
     except Exception as e:
         print("RGB sensor read error:", e)
         return None, None, None, None
@@ -108,11 +109,6 @@ def read_rgb_sensor():
 # RGB LED
 # YOUR TEST PINS
 # =========================
-
-# WARNING:
-# GPIO25 is also used by pump ENA.
-# So red LED and pump ENA share the same pin.
-# I keep it because you said do not change pins.
 
 red_led = Pin(25, Pin.OUT)
 green_led = Pin(26, Pin.OUT)
@@ -148,24 +144,22 @@ def rgb_white():
 
 # =========================
 # PUMP MOTOR DRIVER
-# ORIGINAL PINS - NOT CHANGED
+# ENA is connected to 5V, so speed is always 100%
+# Pump is controlled only by INA and INB
 # =========================
 
 INA = Pin(18, Pin.OUT)
 INB = Pin(19, Pin.OUT)
-ENA = PWM(Pin(25), freq=1000)
 
 
-def pump_on(speed=900):
+def pump_on():
     INA.value(1)
     INB.value(0)
-    ENA.duty(speed)
 
 
 def pump_off():
     INA.value(0)
     INB.value(0)
-    ENA.duty(0)
 
 
 # =========================
@@ -202,14 +196,61 @@ def read_temp_c():
 
 
 # =========================
+# COOLING CONTROL
+# =========================
+
+TARGET_TEMP = 18.0
+
+# Hysteresis:
+# Cooling turns ON above 18.5 C
+# Cooling turns OFF at or below 18.0 C
+COOLING_ON_TEMP = 18.5
+COOLING_OFF_TEMP = 18.0
+
+cooling_state = "OFF"
+
+
+def cooling_on():
+    global cooling_state
+    cooling_relay.value(0)   # active LOW
+    cooling_state = "ON"
+
+
+def cooling_off():
+    global cooling_state
+    cooling_relay.value(1)   # active LOW
+    cooling_state = "OFF"
+
+
+def update_cooling(temp_c):
+    global cooling_state
+
+    if temp_c is None:
+        # Safety: if thermistor fails, stop cooling
+        cooling_relay.value(1)
+        cooling_state = "ERROR"
+        return
+
+    if temp_c > COOLING_ON_TEMP:
+        cooling_on()
+
+    elif temp_c <= COOLING_OFF_TEMP:
+        cooling_off()
+
+    # Between 18.0 and 18.5, keep previous state.
+    # This avoids relay clicking every second.
+
+
+# =========================
 # OLED SCREEN
 # =========================
 
 def show_screen(pump_state, temp_c, raw, r, g, b, c):
     oled.fill(0)
+
     oled.text("DB4 SYSTEM", 0, 0)
-    oled.text("Fan: ON", 0, 12)
-    oled.text("Pump: " + pump_state, 0, 22)
+    oled.text("Pump: " + pump_state, 0, 12)
+    oled.text("Cool: " + cooling_state, 0, 22)
 
     if temp_c is None:
         oled.text("Temp: ERROR", 0, 32)
@@ -231,7 +272,7 @@ def show_screen(pump_state, temp_c, raw, r, g, b, c):
 # =========================
 
 def startup_test():
-    print("Starting DB4 full test")
+    print("Starting DB4 system")
 
     oled.fill(0)
     oled.text("DB4 START", 0, 0)
@@ -249,6 +290,13 @@ def startup_test():
     time.sleep(2)
 
     tcs_init()
+
+    oled.fill(0)
+    oled.text("RGB LED TEST", 0, 0)
+    oled.text("RED", 0, 16)
+    oled.show()
+    rgb_red_only()
+    time.sleep(1)
 
     oled.fill(0)
     oled.text("RGB LED TEST", 0, 0)
@@ -281,62 +329,84 @@ def startup_test():
 def run_system():
     startup_test()
 
-    # =========================
-    # TURN FAN ON FIRST
-    # =========================
+    # Startup safety state
+    fan_relay.value(0)       # Fan ON immediately
+    cooling_off()            # Cooling OFF at start
+    pump_off()
+    rgb_off()
 
-    fan_relay.value(0)      # FAN ON immediately
-    heat_relay.value(1)     # Heating OFF
-
-    print("Fan relay should be ON now")
-    time.sleep(2)
-
+    print("Fan ON")
+    print("Cooling OFF")
+    print("Target temperature:", TARGET_TEMP, "C")
+    print("Cooling ON above:", COOLING_ON_TEMP, "C")
+    print("Cooling OFF at/below:", COOLING_OFF_TEMP, "C")
     print("Main program started")
 
+    time.sleep(2)
+
     while True:
-        # Keep forcing fan ON
-        fan_relay.value(0)
-        heat_relay.value(1)
+        # =========================
+        # PUMP ON PHASE
+        # =========================
 
-        # Pump ON
-        pump_on(1000)
+        pump_on()
 
-        # Use blue LED for pump ON
+        # Blue LED means pump ON
+        red_led.value(0)
         green_led.value(0)
         blue_led.value(1)
 
         for i in range(5):
-            fan_relay.value(0)
+            fan_relay.value(0)   # fan always ON
+
             temp_c, raw = read_temp_c()
+            update_cooling(temp_c)
+
             r, g, b, c = read_rgb_sensor()
 
             show_screen("ON", temp_c, raw, r, g, b, c)
 
-            print("Fan ON | Pump ON | Temp:", temp_c, "ADC:", raw,
-                  "| RGB sensor:", r, g, b, "Clear:", c)
+            print("Fan ON | Pump ON | Cooling:", cooling_state,
+                  "| Temp:", temp_c,
+                  "| ADC:", raw,
+                  "| RGB:", r, g, b,
+                  "| Clear:", c)
 
             time.sleep(1)
 
-        # Pump OFF
+        # =========================
+        # PUMP OFF PHASE
+        # =========================
+
         pump_off()
 
-        # Use green LED for pump OFF
+        # Green LED means pump OFF
+        red_led.value(0)
         green_led.value(1)
         blue_led.value(0)
 
         for i in range(5):
-            fan_relay.value(0)
+            fan_relay.value(0)   # fan always ON
+
             temp_c, raw = read_temp_c()
+            update_cooling(temp_c)
+
             r, g, b, c = read_rgb_sensor()
 
             show_screen("OFF", temp_c, raw, r, g, b, c)
 
-            print("Fan ON | Pump OFF | Temp:", temp_c, "ADC:", raw,
-                  "| RGB sensor:", r, g, b, "Clear:", c)
+            print("Fan ON | Pump OFF | Cooling:", cooling_state,
+                  "| Temp:", temp_c,
+                  "| ADC:", raw,
+                  "| RGB:", r, g, b,
+                  "| Clear:", c)
 
             time.sleep(1)
 
 
-# This lets you run main.py directly too
+# =========================
+# START WHEN RUN DIRECTLY
+# =========================
+
 if __name__ == "__main__":
     run_system()

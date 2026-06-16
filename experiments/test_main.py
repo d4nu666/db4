@@ -1,7 +1,7 @@
 from machine import Pin, PWM, ADC, I2C
 import time
 import math
-import ssd1306
+import lib.ssd1306 as ssd1306
 
 
 # ==================================================
@@ -28,11 +28,34 @@ else:
 fan_relay = Pin(16, Pin.OUT)
 fan_relay.value(0)      # OFF at startup
 
-# Pump L298N motor driver
-# ENA must be jumpered/enabled physically
-# because GPIO25 is used by RGB red
+
+# ==================================================
+# PUMP L298N MOTOR DRIVER
+# ==================================================
+# Wiring:
+# IN1 -> GPIO18
+# IN2 -> GPIO19
+# ENA -> GPIO32
+#
+# IMPORTANT:
+# Remove the jumper from ENA.
+# ENA must NOT be connected to 5V anymore.
+# GPIO32 now controls pump speed with PWM.
+
 INA = Pin(18, Pin.OUT)
 INB = Pin(19, Pin.OUT)
+ENA = PWM(Pin(32), freq=1000)
+
+# Pump speed range: 0 to 1023
+# Try 400, 600, 800, 1023
+# If the pump does not start at low speed, increase this value.
+PUMP_SPEED = 500
+
+# Optional starting boost:
+# Some pumps need full power for a short time to start moving.
+PUMP_START_BOOST = True
+PUMP_BOOST_TIME = 0.5       # seconds
+
 
 # RGB LED for white / 4150K-like illumination
 rgb_red = PWM(Pin(25), freq=1000)
@@ -134,14 +157,38 @@ def fan_off():
 # PUMP FUNCTIONS
 # ==================================================
 
-def pump_on():
+def pump_on(speed=PUMP_SPEED):
+    """
+    Turns pump ON with adjustable speed.
+    speed range: 0 to 1023
+    """
+
+    speed = max(0, min(1023, speed))
+
     INA.value(1)
     INB.value(0)
 
+    if PUMP_START_BOOST and speed > 0:
+        ENA.duty(1023)
+        time.sleep(PUMP_BOOST_TIME)
+
+    ENA.duty(speed)
+
 
 def pump_off():
+    ENA.duty(0)
     INA.value(0)
     INB.value(0)
+
+
+def pump_set_speed(speed):
+    """
+    Change speed while pump is running.
+    speed range: 0 to 1023
+    """
+
+    speed = max(0, min(1023, speed))
+    ENA.duty(speed)
 
 
 # ==================================================
@@ -238,7 +285,7 @@ def read_tcs34725():
 # OLED FUNCTIONS
 # ==================================================
 
-def show_screen(temp, fan_state, elapsed, clear, red, green, blue):
+def show_screen(temp, fan_state, elapsed, clear, red, green, blue, pump_speed):
     oled.fill(0)
 
     oled.text(TEST_NAME + " TEST", 0, 0)
@@ -249,8 +296,8 @@ def show_screen(temp, fan_state, elapsed, clear, red, green, blue):
         oled.text("Temp:{:.1f}C".format(temp), 0, 12)
 
     oled.text("Fan:" + fan_state, 0, 24)
-    oled.text("Time:{}s".format(elapsed), 0, 36)
-    oled.text("OD C:{}".format(clear), 0, 48)
+    oled.text("Pump:{}".format(pump_speed), 0, 36)
+    oled.text("Time:{}s".format(elapsed), 0, 48)
 
     oled.show()
 
@@ -271,7 +318,7 @@ def show_stop_screen(message):
 def create_log_file():
     try:
         with open(LOG_FILE, "w") as f:
-            f.write("time_s,test,temp_c,fan_state,clear,red,green,blue,white_r,white_g,white_b\n")
+            f.write("time_s,test,temp_c,fan_state,pump_speed,clear,red,green,blue,white_r,white_g,white_b\n")
 
         print("Created log file:", LOG_FILE)
 
@@ -279,14 +326,15 @@ def create_log_file():
         print("Could not create log file:", e)
 
 
-def log_data(elapsed, temp, fan_state, clear, red, green, blue):
+def log_data(elapsed, temp, fan_state, pump_speed, clear, red, green, blue):
     try:
         with open(LOG_FILE, "a") as f:
-            f.write("{},{},{},{},{},{},{},{},{},{},{}\n".format(
+            f.write("{},{},{},{},{},{},{},{},{},{},{},{}\n".format(
                 elapsed,
                 TEST_NAME,
                 temp,
                 fan_state,
+                pump_speed,
                 clear,
                 red,
                 green,
@@ -308,7 +356,12 @@ def run_od_temperature_test():
     print("Starting", TEST_NAME, "test")
     print("Fan/cooling relay on GPIO16")
     print("Relay logic: 1 = ON, 0 = OFF")
-    print("Pump uses GPIO18/GPIO19. ENA must be jumpered.")
+    print("Pump L298N:")
+    print("  IN1 -> GPIO18")
+    print("  IN2 -> GPIO19")
+    print("  ENA -> GPIO32")
+    print("  Remove ENA jumper from L298N")
+    print("Pump speed:", PUMP_SPEED)
     print("White RGB LED: R=25, G=26, B=27")
     print("White PWM:", WHITE_R, WHITE_G, WHITE_B)
     print("Data saved to", LOG_FILE)
@@ -320,7 +373,7 @@ def run_od_temperature_test():
 
     # Start pump
     if PUMP_ALWAYS_ON:
-        pump_on()
+        pump_on(PUMP_SPEED)
 
     # Start white LED
     white_led_on()
@@ -362,13 +415,18 @@ def run_od_temperature_test():
             fan_off()
             fan_state = "OFF"
 
-        show_screen(temp, fan_state, elapsed_int, clear, red, green, blue)
-        log_data(elapsed_int, temp, fan_state, clear, red, green, blue)
+        # Keep pump running at selected speed
+        if PUMP_ALWAYS_ON:
+            pump_set_speed(PUMP_SPEED)
+
+        show_screen(temp, fan_state, elapsed_int, clear, red, green, blue, PUMP_SPEED)
+        log_data(elapsed_int, temp, fan_state, PUMP_SPEED, clear, red, green, blue)
 
         print(
             "Time:", elapsed_int,
             "s | Temp:", temp,
             "C | Fan:", fan_state,
+            "| Pump speed:", PUMP_SPEED,
             "| Clear:", clear,
             "| R:", red,
             "| G:", green,

@@ -1,7 +1,7 @@
 from machine import Pin, ADC, I2C
 import time
 import math
-import ssd1306
+import lib.ssd1306 as ssd1306
 
 # =========================
 # PIN SETUP

@@ -1,43 +1,46 @@
-from machine import ADC, Pin
+from machine import Pin, ADC
 import time
 import math
 
-# Thermistor middle point connected to GPIO34
-adc = ADC(Pin(34))
-adc.atten(ADC.ATTN_11DB)       # read up to about 3.3V
-adc.width(ADC.WIDTH_12BIT)     # values 0-4095
+THERMISTOR_PIN = 12
 
-# Adafruit 10k NTC thermistor values
-SERIES_RESISTOR = 10000        # your fixed 10k resistor
-THERMISTOR_NOMINAL = 10000     # 10k at 25C
-TEMPERATURE_NOMINAL = 25       # 25C
+adc = ADC(Pin(THERMISTOR_PIN))
+adc.atten(ADC.ATTN_11DB)
+adc.width(ADC.WIDTH_12BIT)
+
+SERIES_RESISTOR = 10000
+NOMINAL_RESISTANCE = 10000
+NOMINAL_TEMPERATURE = 25
 BETA = 3950
+ADC_MAX = 4095
 
-def read_temp_c():
+print("Thermistor test started")
+print("Thermistor pin: GPIO12")
+print("Do not use GPIO34")
+
+def read_temperature():
     raw = adc.read()
 
-    if raw <= 0 or raw >= 4095:
-        print("Bad reading:", raw)
-        return None
+    if raw <= 0 or raw >= ADC_MAX:
+        return raw, None, None
 
-    # Wiring:
-    # 3V3 -> 10k resistor -> GPIO34 -> thermistor -> GND
-    resistance = SERIES_RESISTOR * raw / (4095 - raw)
+    resistance = SERIES_RESISTOR * raw / (ADC_MAX - raw)
 
-    steinhart = resistance / THERMISTOR_NOMINAL
+    steinhart = resistance / NOMINAL_RESISTANCE
     steinhart = math.log(steinhart)
     steinhart /= BETA
-    steinhart += 1.0 / (TEMPERATURE_NOMINAL + 273.15)
+    steinhart += 1.0 / (NOMINAL_TEMPERATURE + 273.15)
     steinhart = 1.0 / steinhart
     temp_c = steinhart - 273.15
 
     return raw, resistance, temp_c
 
 while True:
-    result = read_temp_c()
+    raw, resistance, temp_c = read_temperature()
 
-    if result:
-        raw, resistance, temp_c = result
-        print("ADC:", raw, "Resistance:", round(resistance), "ohm", "Temp:", round(temp_c, 2), "C")
+    if temp_c is None:
+        print("Invalid reading. Raw:", raw)
+    else:
+        print("Raw:", raw, "| Resistance:", int(resistance), "ohm | Temp:", round(temp_c, 2), "C")
 
     time.sleep(1)

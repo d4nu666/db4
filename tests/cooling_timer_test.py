@@ -1,7 +1,7 @@
 from machine import Pin, PWM, ADC, I2C
 import time
 import math
-import lib.ssd1306 as ssd1306
+import ssd1306
 
 # =========================
 # SETTINGS
@@ -21,7 +21,7 @@ INA = Pin(18, Pin.OUT)
 INB = Pin(19, Pin.OUT)
 ENA = PWM(Pin(23), freq=1000)
 
-thermistor_adc = ADC(Pin(34))
+thermistor_adc = ADC(Pin(12))
 thermistor_adc.atten(ADC.ATTN_11DB)
 thermistor_adc.width(ADC.WIDTH_12BIT)
 

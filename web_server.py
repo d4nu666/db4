@@ -175,244 +175,19 @@ def connect_wifi():
         return None
 
 # =========================
-# WEB PAGE
+# SERVER COMMUNICATIONS
 # =========================
 
-def web_page():
-    html = """<!DOCTYPE html>
-<html>
-<head>
-    <title>DB4 ESP32 Control</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>
-        body {
-            font-family: Arial;
-            background: #f2f2f2;
-            padding: 12px;
-        }
-        .card {
-            background: white;
-            padding: 12px;
-            margin: 8px 0;
-            border-radius: 8px;
-        }
-        button {
-            padding: 12px;
-            margin: 4px;
-            font-size: 16px;
-            border: none;
-            border-radius: 6px;
-            background: #1976d2;
-            color: white;
-        }
-        .on {
-            background: #2e7d32;
-        }
-        .off {
-            background: #555555;
-        }
-        .danger {
-            background: #c62828;
-        }
-    </style>
-</head>
 
-<body>
-    <h1>DB4 ESP32 Control</h1>
-
-    <div class="card">
-        <h2>Sensor Readings</h2>
-        <p><b>Temperature:</b> """ + str(system_state["temperature"]) + """ °C</p>
-        <p><b>RGB sensor:</b></p>
-        <p>R: """ + str(system_state["red_value"]) + """</p>
-        <p>G: """ + str(system_state["green_value"]) + """</p>
-        <p>B: """ + str(system_state["blue_value"]) + """</p>
-        <p>Clear: """ + str(system_state["clear_value"]) + """</p>
-        <p><b>I2C devices:</b> """ + str(system_state["i2c_devices"]) + """</p>
-    </div>
-
-    <div class="card">
-        <h2>System State</h2>
-        <p><b>Pump:</b> """ + system_state["pump"] + """</p>
-        <p><b>Fan:</b> """ + system_state["fan"] + """</p>
-        <p><b>Relay:</b> """ + system_state["heat"] + """</p>
-        <p><b>RGB LED:</b> """ + system_state["rgb"] + """</p>
-    </div>
-
-    <div class="card">
-        <h2>Pump</h2>
-        <a href="/pump/on"><button class="on">Pump ON</button></a>
-        <a href="/pump/off"><button class="danger">Pump OFF</button></a>
-    </div>
-
-    <div class="card">
-        <h2>Fan</h2>
-        <a href="/fan/on"><button class="on">Fan ON</button></a>
-        <a href="/fan/off"><button class="danger">Fan OFF</button></a>
-    </div>
-
-    <div class="card">
-        <h2>Heating / Cooling Relay</h2>
-        <a href="/heat/on"><button class="on">Relay ON</button></a>
-        <a href="/heat/off"><button class="danger">Relay OFF</button></a>
-    </div>
-
-    <div class="card">
-        <h2>RGB LED</h2>
-        <a href="/rgb/red"><button>Red</button></a>
-        <a href="/rgb/green"><button>Green</button></a>
-        <a href="/rgb/blue"><button>Blue</button></a>
-        <a href="/rgb/white"><button>White</button></a>
-        <a href="/rgb/off"><button class="off">RGB OFF</button></a>
-    </div>
-
-    <div class="card">
-        <a href="/"><button>Refresh</button></a>
-    </div>
-</body>
-</html>"""
-
-    return html
 
 # =========================
 # FAST RESPONSES
-# =========================
-
-def quick_redirect(conn):
-    conn.send("HTTP/1.1 303 See Other\r\n")
-    conn.send("Location: /\r\n")
-    conn.send("Connection: close\r\n\r\n")
-
-def send_page(conn):
-    response = web_page()
-    conn.send("HTTP/1.1 200 OK\r\n")
-    conn.send("Content-Type: text/html\r\n")
-    conn.send("Connection: close\r\n\r\n")
-    conn.sendall(response)
-
-def send_no_content(conn):
-    conn.send("HTTP/1.1 204 No Content\r\n")
-    conn.send("Connection: close\r\n\r\n")
+# ========================= old http protocols
 
 # =========================
-# WEB SERVER
+# WEB SERVER FUNCTIONS
 # =========================
 
-def start_server():
-    ip = connect_wifi()
-
-    if ip is None:
-        return
-
-    addr = socket.getaddrinfo("0.0.0.0", 80)[0][-1]
-
-    s = socket.socket()
-    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    s.bind(addr)
-    s.listen(1)
-
-    print("Web server running at http://" + ip)
-
-    while True:
-        conn = None
-
-        try:
-            maybe_update_sensors()
-
-            conn, addr = s.accept()
-            request = conn.recv(512)
-            request = str(request)
-
-            print("Request:", request)
-
-            # Ignore browser favicon request
-            if "/favicon.ico" in request:
-                send_no_content(conn)
-                conn.close()
-                continue
-
-            # Pump commands
-            if "/pump/on" in request:
-                pump_on()
-                quick_redirect(conn)
-                conn.close()
-                continue
-
-            if "/pump/off" in request:
-                pump_off()
-                quick_redirect(conn)
-                conn.close()
-                continue
-
-            # Fan commands
-            if "/fan/on" in request:
-                fan_on()
-                quick_redirect(conn)
-                conn.close()
-                continue
-
-            if "/fan/off" in request:
-                fan_off()
-                quick_redirect(conn)
-                conn.close()
-                continue
-
-            # Relay commands
-            if "/heat/on" in request:
-                heat_on()
-                quick_redirect(conn)
-                conn.close()
-                continue
-
-            if "/heat/off" in request:
-                heat_off()
-                quick_redirect(conn)
-                conn.close()
-                continue
-
-            # RGB commands
-            if "/rgb/red" in request:
-                rgb_red()
-                quick_redirect(conn)
-                conn.close()
-                continue
-
-            if "/rgb/green" in request:
-                rgb_green()
-                quick_redirect(conn)
-                conn.close()
-                continue
-
-            if "/rgb/blue" in request:
-                rgb_blue()
-                quick_redirect(conn)
-                conn.close()
-                continue
-
-            if "/rgb/white" in request:
-                rgb_white()
-                quick_redirect(conn)
-                conn.close()
-                continue
-
-            if "/rgb/off" in request:
-                rgb_off()
-                quick_redirect(conn)
-                conn.close()
-                continue
-
-            # Normal page
-            send_page(conn)
-            conn.close()
-
-        except Exception as e:
-            print("Server error:", e)
-
-            try:
-                if conn:
-                    conn.close()
-            except:
-                pass
 
 # =========================
 # START PROGRAM
@@ -420,4 +195,102 @@ def start_server():
 
 rgb_off()
 update_sensors()
-start_server()
+
+# handles the raw request string
+def HandleStringRequest(request):
+    start = False
+    mid = False
+    end = False
+    messageType = ""
+    message = ""
+    
+    for index, character in enumerate(request.split()):
+        if character == "|":
+            if not start:
+                start = True
+            elif not mid:
+                mid = True
+            elif not end:
+                end = True
+            else:
+                HandleStringRequest(enumerate(request.split())[index])
+        else:
+            if start and not mid:
+                messageType += character
+            elif mid and not end:
+                message += character
+
+    #error handling for invalid requests
+    if not start or not mid or not end:
+        print("Invalid request format: ", request)
+    if messageType == "" or message == "":
+        print("Invalid request content: ", request)
+        return
+
+    match messageType: # add any other extra request types into here with their respective funcitons
+        case "PUMP":
+            if message == "ON":
+                pump_on()
+            elif message == "OFF":
+                pump_off()
+        case "FAN":
+            if message == "ON":
+                fan_on()
+            elif message == "OFF":
+                fan_off()
+        case "RGB":
+            match message:
+                case "RED":
+                    rgb_red()
+                case "GREEN":
+                    rgb_green()
+                case "BLUE":
+                    rgb_blue()
+                case "WHITE":
+                    rgb_white()
+                case "OFF":
+                    rgb_off()
+        case "PID":
+            match message:
+                case "restart":
+                    pass
+                case "off":
+                    pass
+connection = None
+def HandleConnections(server): # needs to just add to existing connections so that events are handled in main loop
+    
+    while True:
+        if connection is None:
+            connection = server.accept() # this will block until a client connects
+        try:
+            maybe_update_sensors()
+
+            request = connection.recv(512) # reads a max of 512 bytes from the client
+            request = str(request) # turns the request from binary into a string
+            HandleStringRequest(request) # handles the requests made to server
+
+        except Exception as e:
+            print("Server error:", e)
+            try:
+                connection.close()
+            except:
+                pass
+            finally:
+                connection = None
+
+def StartServer():
+    ip = connect_wifi()
+
+    if ip is None:
+        return
+    
+    addr = socket.getaddrinfo("0.0.0.0", 80)[0][-1]
+
+    s = socket.socket()
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    s.bind(addr)
+    s.listen(1)
+    print("mussel farm controller running on the ip: " + ip)
+    
+    HandleConnections(s)
+

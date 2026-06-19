@@ -21,3 +21,17 @@ __pycache__/
 *.bak
 *.tmp
 *~
+
+# MicroPython / ESP32 data files generated at runtime
+*.csv
+*.log
+blank.csv
+sample.csv
+cooling_log.csv
+
+# Workspace files (IDE-specific, not project config)
+*.code-workspace
+
+# WiFi credentials (if ever extracted to a config file)
+config.py
+secrets.py

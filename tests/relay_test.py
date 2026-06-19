@@ -1,21 +1,19 @@
 from machine import Pin
 import time
 
-RELAY_PIN = 16
+# Use GPIO16 only if it is free
+relay2 = Pin(16, Pin.OUT)
 
-relay = Pin(RELAY_PIN, Pin.OUT)
+# Most relay modules are active LOW
+ON = 0
+OFF = 1
 
-RELAY_OFF = 0
-RELAY_ON = 1
+relay2.value(OFF)
+time.sleep(2)
 
-print("Peltier relay test started")
-print("GPIO16 controls relay IN1")
+print("Waste pump ON")
+relay2.value(ON)
+time.sleep(3)
 
-while True:
-    relay.value(RELAY_ON)
-    print("Relay ON - Peltier should be ON")
-    #time.sleep(3)
-
-    #relay.value(RELAY_OFF)
-    #print("Relay OFF - Peltier should be OFF")
-    #time.sleep(3)
+print("Waste pump OFF")
+relay2.value(OFF)

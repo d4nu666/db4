@@ -21,7 +21,7 @@ INA = Pin(18, Pin.OUT)
 INB = Pin(19, Pin.OUT)
 ENA = PWM(Pin(23), freq=1000)
 
-thermistor_adc = ADC(Pin(12))
+thermistor_adc = ADC(Pin(35))
 thermistor_adc.atten(ADC.ATTN_11DB)
 thermistor_adc.width(ADC.WIDTH_12BIT)
 

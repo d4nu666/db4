@@ -2,7 +2,7 @@ from machine import Pin, ADC
 import time
 import math
 
-THERMISTOR_PIN = 12
+THERMISTOR_PIN = 35
 
 adc = ADC(Pin(THERMISTOR_PIN))
 adc.atten(ADC.ATTN_11DB)

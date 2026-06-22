@@ -5,7 +5,7 @@
 # SendMessage(messageType, message)
 # to send messages to the client. The website will need to be 
 # set up to handle different request types based on the required
-# functionality of the website. 
+# functionality of the website.
 # =========================
 
 import network

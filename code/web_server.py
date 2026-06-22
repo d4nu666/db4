@@ -1,3 +1,13 @@
+# =========================
+# This is the webserver handler. all you need to use it is
+# from web_server import StartServer, SendMessage
+# to start the server on a separate thread, and then use
+# SendMessage(messageType, message)
+# to send messages to the client. The website will need to be 
+# set up to handle different request types based on the required
+# functionality of the website. 
+# =========================
+
 import network
 import socket
 import time
@@ -173,31 +183,20 @@ def connect_wifi():
     else:
         print("WiFi connection failed")
         return None
-
-# =========================
-# SERVER COMMUNICATIONS
-# =========================
-
-
-
-# =========================
-# FAST RESPONSES
-# ========================= old http protocols
-
-# =========================
-# WEB SERVER FUNCTIONS
-# =========================
-
-
+    
 # =========================
 # START PROGRAM
 # =========================
 
 rgb_off()
 update_sensors()
+pendingMessages = {"temperature": "0"}
+def SendMessage(requestType, message):
+    request = "|" + requestType + "|" + message + "|"
+    pendingMessages[requestType] = message
 
 # handles the raw request string
-def HandleStringRequest(request):
+def HandlePendingRequest(request):
     start = False
     mid = False
     end = False
@@ -213,7 +212,7 @@ def HandleStringRequest(request):
             elif not end:
                 end = True
             else:
-                HandleStringRequest(enumerate(request.split())[index])
+                HandlePendingRequest(enumerate(request.split())[index])
         else:
             if start and not mid:
                 messageType += character
@@ -256,18 +255,30 @@ def HandleStringRequest(request):
                     pass
                 case "off":
                     pass
-connection = None
+
+def HandlePendingMessages(connection):
+    for requestType, message in pendingMessages.items():
+        finalMessage = "|" + requestType + "|" + message + "|"
+        try:
+            connection.send(finalMessage)
+        except Exception as e:
+            print("Error sending message:", e)
+            connection.close()
+            connection = None
+
 def HandleConnections(server): # needs to just add to existing connections so that events are handled in main loop
-    
+    connection = None
     while True:
         if connection is None:
             connection = server.accept() # this will block until a client connects
         try:
+            HandlePendingMessages(connection)
             maybe_update_sensors()
 
-            request = connection.recv(512) # reads a max of 512 bytes from the client
+            request = connection.recv(4096) # reads a max of 4096 bytes from the client
             request = str(request) # turns the request from binary into a string
-            HandleStringRequest(request) # handles the requests made to server
+            HandlePendingRequest(request) # handles the requests made to server
+            
 
         except Exception as e:
             print("Server error:", e)
@@ -293,4 +304,5 @@ def StartServer():
     print("mussel farm controller running on the ip: " + ip)
     
     HandleConnections(s)
+
 

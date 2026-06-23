@@ -17,6 +17,7 @@ db4/
 │   ├── boot.py            # runs first on power-up: forces all actuators OFF
 │   ├── main.py            # autonomous controller (PID + biological scheduler)
 │   ├── webserver.py       # interactive web dashboard (alternative to main.py)
+│   ├── web_server_threaded.py # experimental message-based server (|type|msg| protocol)
 │   ├── stop.py            # manual emergency stop — sets every output OFF
 │   ├── config.py          # pin map + all constants (single source of truth)
 │   ├── secrets_example.py # copy to secrets.py and add your WiFi

@@ -1,342 +1,271 @@
-# ==================================================
-# DB4 COOLING TEST - PUMP SPEED VARIATION
-# Tests how pump speed affects cooling performance
-#
-# Output CSV:
-# /code/pump_speed_cooling_test.csv
-#
-# Hardware:
-# Thermistor: GPIO12
-# Cooling relay: GPIO16
-# Pump L298N:
-#   IN1 -> GPIO18
-#   IN2 -> GPIO19
-#   ENA -> GPIO32 PWM
-# OLED:
-#   SDA -> GPIO21
-#   SCL -> GPIO22
-# ==================================================
-
 from machine import Pin, PWM, ADC, I2C
 import time
 import math
-import os
 import sys
 
 # ==================================================
-# FOLDER SETUP
+# DB4 CONSTANT TEMPERATURE TEST
+# Only cooling pump + OLED + thermistor
+# Algae pump OFF
+# Waste pump OFF
+# Logs data to temp_test.csv
 # ==================================================
 
-try:
-    os.chdir("/code")
-except:
-    pass
-
-sys.path.append("/code")
-
-import ssd1306
-
+LOG_FILE = "temp_test.csv"
 
 # ==================================================
-# TEST SETTINGS
+# PIN SETUP
 # ==================================================
 
-LOG_FILE = "pump_speed_cooling_test.csv"
+# Thermistor
+THERMISTOR_PIN = 35
 
-# Pump speeds to test
-# You can change these values
-PUMP_SPEEDS = [300, 500, 700, 900, 1023]
-
-# How long each pump speed runs
-# Start with 3 minutes for testing.
-# Use 10 minutes for better data.
-STAGE_DURATION_S = 3 * 60
-
-# Time between temperature measurements
-SAMPLE_INTERVAL_S = 2
-
-# Safety temperature
-# Cooling will turn OFF if water reaches this temperature
-MIN_SAFE_TEMP = 18.0
-
-# Thermistor pin
-# GPIO34 is damaged. Use GPIO12.
-TEMP_ADC_PIN = 12
-
-# Cooling relay pin
-COOLING_RELAY_PIN = 16
-
-# Your latest relay logic:
-# 1 = ON
-# 0 = OFF
-RELAY_ON = 1
-RELAY_OFF = 0
-
-# Pump L298N pins
-PUMP_INA_PIN = 18
-PUMP_INB_PIN = 19
+# Cooling pump on L298N
+# IN1 -> GPIO18
+# IN2 -> GPIO19
+# ENA -> GPIO32
+PUMP_IN1_PIN = 18
+PUMP_IN2_PIN = 19
 PUMP_PWM_PIN = 32
 
-# OLED I2C pins
-I2C_SDA_PIN = 21
-I2C_SCL_PIN = 22
-
-
-# ==================================================
-# HARDWARE SETUP
-# ==================================================
-
-cooling_relay = Pin(COOLING_RELAY_PIN, Pin.OUT)
-cooling_relay.value(RELAY_OFF)
-
-INA = Pin(PUMP_INA_PIN, Pin.OUT)
-INB = Pin(PUMP_INB_PIN, Pin.OUT)
-ENA = PWM(Pin(PUMP_PWM_PIN), freq=1000)
-
-temp_adc = ADC(Pin(TEMP_ADC_PIN))
-temp_adc.atten(ADC.ATTN_11DB)
-temp_adc.width(ADC.WIDTH_12BIT)
-
-i2c = I2C(
-    0,
-    scl=Pin(I2C_SCL_PIN),
-    sda=Pin(I2C_SDA_PIN),
-    freq=400000
-)
-
-oled = ssd1306.SSD1306_I2C(128, 64, i2c)
-
+# OLED I2C
+OLED_SDA = 21
+OLED_SCL = 22
 
 # ==================================================
-# THERMISTOR SETTINGS
-# Adafruit 10K NTC thermistor
-#
-# Wiring assumed:
-# 3.3V --- 10k resistor --- GPIO12 --- thermistor --- GND
+# PUMP SETTINGS
 # ==================================================
 
-SERIES_RESISTOR = 10000.0
-NOMINAL_RESISTANCE = 10000.0
-NOMINAL_TEMP_C = 25.0
-BETA = 3950.0
-ADC_MAX = 4095.0
-
+PUMP_PWM = 700          # 0 to 1023
+PUMP_FREQ = 1000
 
 # ==================================================
-# HARDWARE FUNCTIONS
+# TEMPERATURE SETTINGS
 # ==================================================
 
-def pump_on(pwm_value):
-    INA.value(1)
-    INB.value(0)
-    ENA.duty(pwm_value)
+SERIES_RESISTOR = 10000
+NOMINAL_RESISTANCE = 10000
+NOMINAL_TEMPERATURE = 25
+BETA = 3950
+ADC_MAX = 4095
+
+SAMPLES = 20
+SAMPLE_DELAY_MS = 5
+
+LOG_INTERVAL_SECONDS = 2
+
+# ==================================================
+# HARDWARE INIT
+# ==================================================
+
+# Cooling pump
+pump_in1 = Pin(PUMP_IN1_PIN, Pin.OUT)
+pump_in2 = Pin(PUMP_IN2_PIN, Pin.OUT)
+pump_pwm = PWM(Pin(PUMP_PWM_PIN), freq=PUMP_FREQ)
 
 
-def pump_off():
-    ENA.duty(0)
-    INA.value(0)
-    INB.value(0)
+# Thermistor ADC
+adc = ADC(Pin(THERMISTOR_PIN))
+adc.atten(ADC.ATTN_11DB)
+adc.width(ADC.WIDTH_12BIT)
+
+# OLED
+oled = None
+try:
+    import ssd1306
+    i2c = I2C(0, scl=Pin(OLED_SCL), sda=Pin(OLED_SDA), freq=400000)
+    devices = i2c.scan()
+    print("I2C devices:", [hex(d) for d in devices])
+
+    if 0x3C in devices:
+        oled = ssd1306.SSD1306_I2C(128, 64, i2c)
+        oled.fill(0)
+        oled.text("DB4 Temp Test", 0, 0)
+        oled.text("OLED ready", 0, 15)
+        oled.show()
+        print("OLED ready")
+    else:
+        print("OLED not found at 0x3C")
+except Exception as e:
+    print("OLED init error:", e)
+    oled = None
+
+# ==================================================
+# FUNCTIONS
+# ==================================================
+
+def cooling_pump_on(pwm_value=PUMP_PWM):
+    pump_in1.value(1)
+    pump_in2.value(0)
+    pump_pwm.duty(pwm_value)
+
+def cooling_pump_off():
+    pump_pwm.duty(0)
+    pump_in1.value(0)
+    pump_in2.value(0)
 
 
-def cooling_on():
-    cooling_relay.value(RELAY_ON)
+def read_raw_average():
+    total = 0
+    valid = 0
 
+    for _ in range(SAMPLES):
+        raw = adc.read()
 
-def cooling_off():
-    cooling_relay.value(RELAY_OFF)
+        if 0 < raw < ADC_MAX:
+            total += raw
+            valid += 1
 
+        time.sleep_ms(SAMPLE_DELAY_MS)
 
-def stop_everything():
-    cooling_off()
-    pump_off()
+    if valid == 0:
+        return None
+
+    return total / valid
+
+def read_temperature():
+    raw = read_raw_average()
+
+    if raw is None:
+        return None, None, None
+
+    try:
+        resistance = SERIES_RESISTOR * raw / (ADC_MAX - raw)
+
+        steinhart = resistance / NOMINAL_RESISTANCE
+        steinhart = math.log(steinhart)
+        steinhart /= BETA
+        steinhart += 1.0 / (NOMINAL_TEMPERATURE + 273.15)
+        steinhart = 1.0 / steinhart
+        temp_c = steinhart - 273.15
+
+        return raw, resistance, temp_c
+
+    except Exception:
+        return raw, None, None
+
+def format_time(seconds):
+    h = seconds // 3600
+    m = (seconds % 3600) // 60
+    s = seconds % 60
+    return "{:02d}:{:02d}:{:02d}".format(h, m, s)
+
+def update_oled(elapsed_s, temp_c, raw, pump_pwm_value):
+    if oled is None:
+        return
 
     try:
         oled.fill(0)
-        oled.text("TEST FINISHED", 0, 0)
-        oled.text("Cooling OFF", 0, 18)
-        oled.text("Pump OFF", 0, 32)
+        oled.text("DB4 Temp Test", 0, 0)
+        oled.text("Time " + format_time(elapsed_s), 0, 12)
+
+        if temp_c is not None:
+            oled.text("Temp {:.2f} C".format(temp_c), 0, 26)
+        else:
+            oled.text("Temp ERROR", 0, 26)
+
+        if raw is not None:
+            oled.text("Raw {:.0f}".format(raw), 0, 40)
+        else:
+            oled.text("Raw ERROR", 0, 40)
+
+        oled.text("Cool PWM {}".format(pump_pwm_value), 0, 54)
         oled.show()
-    except:
-        pass
 
-    print("Everything stopped safely.")
-
-
-# ==================================================
-# TEMPERATURE FUNCTION
-# ==================================================
-
-def read_temperature():
-    total = 0
-    samples = 20
-
-    for i in range(samples):
-        total += temp_adc.read()
-        time.sleep_ms(5)
-
-    raw = total / samples
-
-    if raw <= 0 or raw >= ADC_MAX:
-        return None, raw
-
-    resistance = SERIES_RESISTOR * raw / (ADC_MAX - raw)
-
-    steinhart = resistance / NOMINAL_RESISTANCE
-    steinhart = math.log(steinhart)
-    steinhart = steinhart / BETA
-    steinhart = steinhart + (1.0 / (NOMINAL_TEMP_C + 273.15))
-    steinhart = 1.0 / steinhart
-
-    temp_c = steinhart - 273.15
-
-    return temp_c, raw
-
-
-# ==================================================
-# OLED DISPLAY
-# ==================================================
-
-def update_oled(stage_index, pump_pwm, temp, elapsed_s, stage_time_s, cooling_state):
-    oled.fill(0)
-
-    oled.text("Cooling Test", 0, 0)
-    oled.text("Stage: %d/%d" % (stage_index + 1, len(PUMP_SPEEDS)), 0, 12)
-    oled.text("Pump: %d" % pump_pwm, 0, 24)
-
-    if temp is None:
-        oled.text("Temp: ERROR", 0, 36)
-    else:
-        oled.text("Temp: %.2f C" % temp, 0, 36)
-
-    if cooling_state:
-        oled.text("Cool: ON", 0, 50)
-    else:
-        oled.text("Cool: OFF", 0, 50)
-
-    oled.show()
-
-
-# ==================================================
-# CSV LOGGING
-# ==================================================
+    except Exception as e:
+        print("OLED update error:", e)
 
 def create_log_file():
-    with open(LOG_FILE, "w") as f:
-        f.write(
-            "time_s,stage,stage_time_s,pump_pwm,temp_c,raw_adc,cooling_on,notes\n"
-        )
+    try:
+        with open(LOG_FILE, "w") as f:
+            f.write("time_s,time_hms,raw,resistance_ohm,temp_c,cooling_pwm,algae_pump,waste_pump\n")
+        print("Logging to", LOG_FILE)
+    except Exception as e:
+        print("Log file error:", e)
 
+def write_log(elapsed_s, raw, resistance, temp_c, pump_pwm_value):
+    try:
+        with open(LOG_FILE, "a") as f:
+            f.write("{},{},{},{},{},{},OFF,OFF\n".format(
+                elapsed_s,
+                format_time(elapsed_s),
+                "" if raw is None else round(raw, 2),
+                "" if resistance is None else round(resistance, 2),
+                "" if temp_c is None else round(temp_c, 2),
+                pump_pwm_value
+            ))
+    except Exception as e:
+        print("Write log error:", e)
 
-def log_data(time_s, stage, stage_time_s, pump_pwm, temp_c, raw_adc, cooling_state, notes):
-    with open(LOG_FILE, "a") as f:
-        f.write("{},{},{},{},{},{},{},{}\n".format(
-            time_s,
-            stage,
-            stage_time_s,
-            pump_pwm,
-            temp_c if temp_c is not None else "",
-            raw_adc,
-            1 if cooling_state else 0,
-            notes
+def safe_stop():
+    print("Stopping everything...")
+    cooling_pump_off()
+
+    if oled is not None:
+        try:
+            oled.fill(0)
+            oled.text("TEST STOPPED", 0, 0)
+            oled.text("Cooling OFF", 0, 16)
+            oled.text("Algae OFF", 0, 32)
+            oled.text("Waste OFF", 0, 48)
+            oled.show()
+        except:
+            pass
+
+# ==================================================
+# MAIN LOOP
+# ==================================================
+
+print("====================================")
+print("DB4 constant temperature test started")
+print("ONLY cooling pump + OLED + thermistor active")
+print("Algae pump forced OFF")
+print("Waste pump forced OFF")
+print("Thermistor pin: GPIO{}".format(THERMISTOR_PIN))
+print("Cooling PWM pin: GPIO{}".format(PUMP_PWM_PIN))
+print("Cooling PWM value:", PUMP_PWM)
+print("Press CTRL+C to stop")
+print("====================================")
+
+create_log_file()
+
+start_ms = time.ticks_ms()
+last_log_ms = 0
+
+try:
+    cooling_pump_on(PUMP_PWM)
+
+    while True:
+        now_ms = time.ticks_ms()
+        elapsed_s = time.ticks_diff(now_ms, start_ms) // 1000
+
+    
+
+        # Keep cooling pump ON permanently
+        cooling_pump_on(PUMP_PWM)
+
+        raw, resistance, temp_c = read_temperature()
+
+        print("Time: {} | Temp: {} C | Raw: {} | Cooling PWM: {}".format(
+            format_time(elapsed_s),
+            "ERROR" if temp_c is None else "{:.2f}".format(temp_c),
+            "ERROR" if raw is None else "{:.0f}".format(raw),
+            PUMP_PWM
         ))
 
+        update_oled(elapsed_s, temp_c, raw, PUMP_PWM)
 
-# ==================================================
-# MAIN COOLING TEST
-# ==================================================
+        if time.ticks_diff(now_ms, last_log_ms) >= LOG_INTERVAL_SECONDS * 1000:
+            write_log(elapsed_s, raw, resistance, temp_c, PUMP_PWM)
+            last_log_ms = now_ms
 
-def main():
-    print("====================================")
-    print("DB4 COOLING TEST STARTED")
-    print("Testing pump speeds:", PUMP_SPEEDS)
-    print("Stage duration:", STAGE_DURATION_S, "seconds")
-    print("CSV file:", LOG_FILE)
-    print("Thermistor: GPIO", TEMP_ADC_PIN)
-    print("====================================")
+        time.sleep(1)
 
-    create_log_file()
+except KeyboardInterrupt:
+    print("Keyboard interrupt")
 
-    start_time = time.time()
+except Exception as e:
+    print("Fatal error:", e)
 
-    try:
-        for stage_index, pump_pwm in enumerate(PUMP_SPEEDS):
-            print("")
-            print("====================================")
-            print("Starting stage", stage_index + 1)
-            print("Pump PWM:", pump_pwm)
-            print("====================================")
-
-            pump_on(pump_pwm)
-            stage_start = time.time()
-
-            while True:
-                now = time.time()
-                elapsed_s = int(now - start_time)
-                stage_time_s = int(now - stage_start)
-
-                if stage_time_s >= STAGE_DURATION_S:
-                    break
-
-                temp, raw = read_temperature()
-
-                # Safety logic:
-                # Cooling ON while temperature is above 18 C.
-                # Cooling OFF at or below 18 C.
-                if temp is not None and temp > MIN_SAFE_TEMP:
-                    cooling_on()
-                    cooling_state = True
-                    notes = "cooling"
-                else:
-                    cooling_off()
-                    cooling_state = False
-                    notes = "target_reached"
-
-                update_oled(
-                    stage_index,
-                    pump_pwm,
-                    temp,
-                    elapsed_s,
-                    stage_time_s,
-                    cooling_state
-                )
-
-                log_data(
-                    elapsed_s,
-                    stage_index + 1,
-                    stage_time_s,
-                    pump_pwm,
-                    temp,
-                    raw,
-                    cooling_state,
-                    notes
-                )
-
-                print(
-                    "Time: %ds | Stage: %d | Pump PWM: %d | Temp: %s C | Cooling: %s" % (
-                        elapsed_s,
-                        stage_index + 1,
-                        pump_pwm,
-                        "%.2f" % temp if temp is not None else "ERROR",
-                        "ON" if cooling_state else "OFF"
-                    )
-                )
-
-                time.sleep(SAMPLE_INTERVAL_S)
-
-            print("Stage", stage_index + 1, "finished.")
-
-        print("")
-        print("All pump speed stages finished.")
-
-    except KeyboardInterrupt:
-        print("Cooling test stopped by user.")
-
-    finally:
-        stop_everything()
-
-
-# ==================================================
-# AUTO START
-# ==================================================
-
-main()
+finally:
+    safe_stop()

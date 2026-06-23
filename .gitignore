@@ -6,32 +6,25 @@ __pycache__/
 # macOS
 .DS_Store
 
-# VS Code local settings
+# IDE / editor settings
 .vscode/
+.idea/
+*.code-workspace
 
 # Pymakr / local tool files
 .pymakr/
-*.log
+pymakr.conf
 
-# Secrets / environment files
+# Secrets / WiFi credentials
+secrets.py
 .env
 .env.*
+
+# Runtime logs generated on the ESP32
+*.log
+db4_final_log.csv
 
 # Temporary / backup files
 *.bak
 *.tmp
 *~
-
-# MicroPython / ESP32 data files generated at runtime
-*.csv
-*.log
-blank.csv
-sample.csv
-cooling_log.csv
-
-# Workspace files (IDE-specific, not project config)
-*.code-workspace
-
-# WiFi credentials (if ever extracted to a config file)
-config.py
-secrets.py

@@ -1,0 +1,34 @@
+AQUA Experiment Data Analysis - Presentation Notes
+
+Suggested 4-slide structure:
+
+Slide 1 - Experiment overview
+- Aim: evaluate algae growth and mussel filtration using concentration data.
+- Two datasets were used: mussel filtration over 30 min, and algae growth over 24 h.
+- Key formulas:
+  μ = ln(N_final / N_initial) / 24
+  doubling time = ln(2) / μ
+  filtration model: ln(Ct) = ln(C0) - k t
+
+Slide 2 - Algae growth results
+- Overall mean growth rate μ ≈ 0.0351 h^-1.
+- Overall doubling time ≈ 19.7 h.
+- Highest mean μ: G3.
+- Lowest mean μ: G4.
+- Conclusion: algae grew in all groups; growth rate is close to a one-day doubling time.
+
+Slide 3 - Mussel filtration results
+- Concentration generally decreased over 30 min for 2000, 3000, 5000, 7000 and 10000 cells/mL.
+- Most reliable patterns: 2000, 5000, 7000 and 10000 cells/mL.
+- Noisy concentrations: 500, 1500 and 4000 cells/mL.
+- Conclusion: mussels likely filtered algae, but some measurements were affected by mixing/sampling error.
+
+Slide 4 - Final conclusion and improvements
+- The data proves that the prototype/experiment can detect changes in algae concentration.
+- Error bars show that repeatability is still a limitation.
+- Improvements:
+  1. Mix the sample before every reading.
+  2. Repeat measurements more times.
+  3. Calibrate OD sensor with blank/dark readings.
+  4. Keep the optical path light-tight.
+  5. Log all settings: LED brightness, path length, sampling time, and pump state.

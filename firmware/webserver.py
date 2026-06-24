@@ -1,155 +1,40 @@
 # ============================================================
-# DB4 web control server (interactive alternative to main.py).
-# Serves a control dashboard over WiFi and exposes /data JSON.
+# DB4 web control dashboard.
 #
-# Reuses config.py + lib/ drivers, so there is no duplicated
-# pin setup. WiFi credentials come from secrets.py.
-# Run this OR main.py - not both (they share the same pins).
+# Serves a control page over WiFi and exposes /data JSON. Operates
+# on the shared hardware/state in system.py, so it never fights
+# main.py over the pins.
+#
+# Normally started by main.py on a background thread (serve()).
+# Can also be run standalone, in which case it refreshes the
+# sensors itself and starts in manual mode.
+#
+# WiFi credentials come from secrets.py.
 # ============================================================
 
 import network
 import socket
-import utime
+import time
 import json
 import sys
-from machine import Pin, I2C
+import os
+
+# Import path fix - works whether files are at / or /firmware.
+try:
+    os.chdir("/firmware")
+except OSError:
+    pass
+for _p in ["/", "/lib", "/firmware", "/firmware/lib"]:
+    if _p not in sys.path:
+        sys.path.append(_p)
 
 import config
-from thermistor import Thermistor
-import actuators
+import system
 
 try:
     from secrets import WIFI_SSID, WIFI_PASSWORD
 except ImportError:
     raise ImportError("Create secrets.py from secrets_example.py with your WiFi details.")
-
-TEMP_HYSTERESIS = 0.4
-
-# ---- hardware -------------------------------------------------
-thermistor = Thermistor()
-cooling_pump = actuators.CoolingPump()
-algae_pump = actuators.make_algae_pump()
-waste_pump = actuators.make_waste_pump()
-led = actuators.StatusLED()
-
-oled = None
-try:
-    import ssd1306
-    i2c = I2C(0, scl=Pin(config.I2C_SCL), sda=Pin(config.I2C_SDA), freq=config.I2C_FREQ)
-    oled = ssd1306.SSD1306_I2C(128, 64, i2c)
-except Exception as e:
-    print("OLED disabled:", e)
-
-# ---- state ----------------------------------------------------
-start_ms = utime.ticks_ms()
-last_oled_ms = 0
-
-state = {
-    "mode": "manual",
-    "temperature": None,
-    "raw_adc": 0,
-    "target_temp": config.TARGET_TEMP,
-    "cooling_pump": False,
-    "cooling_pwm": 500,
-    "algae_pump": False,
-    "waste_pump": False,
-    "uptime_s": 0,
-}
-
-
-# ---- control helpers -----------------------------------------
-def update_led():
-    if state["mode"] == "auto":
-        led.blue()
-    elif state["cooling_pump"]:
-        led.green()
-    elif state["algae_pump"] or state["waste_pump"]:
-        led.red()
-    else:
-        led.off()
-
-
-def cooling_on(pwm=None):
-    cooling_pump.set(state["cooling_pwm"] if pwm is None else pwm)
-    state["cooling_pwm"] = cooling_pump.duty
-    state["cooling_pump"] = True
-
-
-def cooling_off():
-    cooling_pump.off()
-    state["cooling_pump"] = False
-
-
-def algae_on():
-    algae_pump.on()
-    state["algae_pump"] = True
-
-
-def algae_off():
-    algae_pump.off()
-    state["algae_pump"] = False
-
-
-def waste_on():
-    waste_pump.on()
-    state["waste_pump"] = True
-
-
-def waste_off():
-    waste_pump.off()
-    state["waste_pump"] = False
-
-
-def stop_all():
-    cooling_off()
-    algae_off()
-    waste_off()
-    state["mode"] = "manual"
-    update_led()
-
-
-def auto_control():
-    temp = state["temperature"]
-    if temp is None:
-        cooling_off()
-    elif temp > state["target_temp"] + TEMP_HYSTERESIS:
-        cooling_on(state["cooling_pwm"])
-    elif temp <= state["target_temp"]:
-        cooling_off()
-
-
-def update_oled():
-    if oled is None:
-        return
-    try:
-        oled.fill(0)
-        oled.text("DB4 Web Server", 0, 0)
-        t = state["temperature"]
-        oled.text("Temp: ERROR" if t is None else "Temp: %.2f C" % t, 0, 14)
-        oled.text("Mode: " + state["mode"], 0, 28)
-        oled.text("CoolPump:%s" % ("ON" if state["cooling_pump"] else "OFF"), 0, 42)
-        oled.text("A:%s W:%s" % (
-            "ON" if state["algae_pump"] else "OFF",
-            "ON" if state["waste_pump"] else "OFF"), 0, 54)
-        oled.show()
-    except Exception as e:
-        print("OLED update failed:", e)
-
-
-def update_system():
-    global last_oled_ms
-    raw, _, temp_c = thermistor.read(samples=10)
-    state["raw_adc"] = 0 if raw is None else int(raw)
-    state["temperature"] = None if temp_c is None else round(temp_c, 2)
-    state["uptime_s"] = int(utime.ticks_diff(utime.ticks_ms(), start_ms) / 1000)
-
-    if state["mode"] == "auto":
-        auto_control()
-    update_led()
-
-    if utime.ticks_diff(utime.ticks_ms(), last_oled_ms) > 3000:
-        update_oled()
-        last_oled_ms = utime.ticks_ms()
 
 
 # ---- WiFi -----------------------------------------------------
@@ -161,7 +46,7 @@ def connect_wifi():
         wlan.connect(WIFI_SSID, WIFI_PASSWORD)
         timeout = 25
         while not wlan.isconnected() and timeout > 0:
-            utime.sleep(1)
+            time.sleep(1)
             timeout -= 1
     if wlan.isconnected():
         ip = wlan.ifconfig()[0]
@@ -298,15 +183,16 @@ def set_pwm_from_path(path):
         pwm = max(0, min(config.PWM_MAX, int(value)))
     except ValueError:
         return "INVALID PWM VALUE"
-    state["cooling_pwm"] = pwm
-    if state["cooling_pump"]:
-        cooling_on(pwm)
+    system.state["cooling_pwm"] = pwm
+    if system.state["cooling_pump"]:
+        system.cooling_set(pwm)
     return "PWM SET TO " + str(pwm)
 
 
-# Routes that just need a mode switch + an action.
+# A manual command first switches the system into manual mode so the
+# autonomous loop in main.py stops overriding the actuators.
 def _manual(action):
-    state["mode"] = "manual"
+    system.set_mode("manual")
     action()
 
 
@@ -314,37 +200,39 @@ def handle(path):
     if path == "/":
         return web_page(), "text/html"
     if path.startswith("/data"):
-        return json.dumps(state), "application/json"
+        return json.dumps(system.state), "application/json"
     if path.startswith("/auto"):
-        state["mode"] = "auto"
+        system.set_mode("auto")
         return "AUTO MODE", "text/html"
     if path.startswith("/manual"):
-        state["mode"] = "manual"
+        system.set_mode("manual")
         return "MANUAL MODE", "text/html"
     if path.startswith("/cooling_pump_on"):
-        _manual(cooling_on); return "COOLING PUMP ON", "text/html"
+        _manual(lambda: system.cooling_set(system.state["cooling_pwm"]))
+        return "COOLING PUMP ON", "text/html"
     if path.startswith("/cooling_pump_off"):
-        _manual(cooling_off); return "COOLING PUMP OFF", "text/html"
+        _manual(system.cooling_off); return "COOLING PUMP OFF", "text/html"
     if path.startswith("/algae_on"):
-        _manual(algae_on); return "ALGAE PUMP ON", "text/html"
+        _manual(system.algae_on); return "ALGAE PUMP ON", "text/html"
     if path.startswith("/algae_off"):
-        _manual(algae_off); return "ALGAE PUMP OFF", "text/html"
+        _manual(system.algae_off); return "ALGAE PUMP OFF", "text/html"
     if path.startswith("/waste_on"):
-        _manual(waste_on); return "WASTE PUMP ON", "text/html"
+        _manual(system.waste_on); return "WASTE PUMP ON", "text/html"
     if path.startswith("/waste_off"):
-        _manual(waste_off); return "WASTE PUMP OFF", "text/html"
+        _manual(system.waste_off); return "WASTE PUMP OFF", "text/html"
     if path.startswith("/set_pwm"):
-        state["mode"] = "manual"
+        system.set_mode("manual")
         return set_pwm_from_path(path), "text/html"
     if path.startswith("/stop"):
-        stop_all(); return "ALL SYSTEMS STOPPED", "text/html"
+        system.emergency_stop(); return "ALL SYSTEMS STOPPED", "text/html"
     return "404 NOT FOUND", "text/html"
 
 
-def start_web_server():
+def serve():
+    """Blocking web-server loop. Started on a thread by main.py."""
     ip = connect_wifi()
     if ip is None:
-        print("Cannot start server without WiFi")
+        print("Web dashboard unavailable (no WiFi)")
         return
 
     addr = socket.getaddrinfo("0.0.0.0", 80)[0][-1]
@@ -353,10 +241,9 @@ def start_web_server():
     server.bind(addr)
     server.listen(1)
     server.settimeout(0.5)
-    print("Web server running at http://" + ip)
+    print("Web dashboard running at http://" + ip)
 
     while True:
-        update_system()
         client = None
         try:
             client, _ = server.accept()
@@ -365,7 +252,7 @@ def start_web_server():
             content, ctype = handle(path)
             send_response(client, content, ctype)
         except OSError:
-            pass
+            pass  # accept() timeout - lets the loop breathe
         except Exception as e:
             print("Server error:")
             sys.print_exception(e)
@@ -378,16 +265,23 @@ def start_web_server():
 
 
 def run():
+    """Standalone entry: refresh sensors in the background, then serve."""
+    system.set_mode("manual")
     try:
-        stop_all()
-        start_web_server()
-    except KeyboardInterrupt:
-        print("Stopped by user")
-        stop_all()
+        import _thread
+
+        def _refresh():
+            while True:
+                try:
+                    system.read_and_update()
+                except Exception as e:
+                    print("refresh error:", e)
+                time.sleep(2)
+
+        _thread.start_new_thread(_refresh, ())
     except Exception as e:
-        print("Fatal error:")
-        sys.print_exception(e)
-        stop_all()
+        print("sensor refresh not started:", e)
+    serve()
 
 
 if __name__ == "__main__":

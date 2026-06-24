@@ -1,131 +1,107 @@
 # ============================================================
-# DB4 Mussel Bioreactor - autonomous controller (headless).
+# DB4 Mussel Bioreactor - main entry point.
 #
-# Responsibilities:
-#   - read tank temperature (thermistor)
-#   - regulate it with a cooling PID + peltier
-#   - run the biological algae/waste scheduler
-#   - show status on the OLED and RGB LED
-#   - log everything to CSV
+# On boot this:
+#   - starts the web dashboard (webserver.py) on a background thread
+#   - runs the autonomous control loop (temperature PID + biological
+#     scheduler + logging) on the main thread
+#
+# Both share one set of hardware via system.py. The dashboard's
+# "Manual mode" pauses the autonomous control so manual commands
+# stick; "Auto" hands control back. Emergency stop always works.
 #
 # Hardware details live in config.py. Drivers live in lib/.
-# For interactive web control instead, run webserver.py.
 # ============================================================
 
 import time
-from machine import Pin, I2C
+import sys
+import os
+from machine import Pin
+
+# ==================================================
+# Import path fix
+# Works whether files are uploaded to / or /firmware
+# ==================================================
+
+try:
+    os.chdir("/firmware")
+except OSError:
+    pass
+
+for path in ["/", "/lib", "/firmware", "/firmware/lib"]:
+    if path not in sys.path:
+        sys.path.append(path)
 
 import config
-from thermistor import Thermistor
-from pid import CoolingPID
-from bio_model import BioController
-import actuators
-
-# ---- hardware -------------------------------------------------
-thermistor = Thermistor()
-cooling_pump = actuators.CoolingPump()
-algae_pump = actuators.make_algae_pump()
-waste_pump = actuators.make_waste_pump()
-peltier = actuators.make_peltier()
-led = actuators.StatusLED()
-
-pid = CoolingPID()
-bio = BioController(algae_pump, waste_pump)
-
-# ---- optional OLED -------------------------------------------
-oled = None
-try:
-    import ssd1306
-    i2c = I2C(0, scl=Pin(config.I2C_SCL), sda=Pin(config.I2C_SDA), freq=config.I2C_FREQ)
-    oled = ssd1306.SSD1306_I2C(128, 64, i2c)
-    oled.fill(0)
-    oled.text("DB4 System", 0, 0)
-    oled.text("Starting...", 0, 12)
-    oled.show()
-except Exception as e:
-    print("OLED not used:", e)
-    oled = None
+import system
 
 
-def stop_everything():
-    peltier.off()
-    waste_pump.off()
-    algae_pump.off()
-    cooling_pump.off()
-    led.off()
-
-
-def apply_temperature_control(temp_c):
-    """Drive the cooling pump from the PID. Returns (pid_output, error)."""
-    peltier.on()
-
-    if temp_c is None:
-        cooling_pump.off()
-        return 0.0, 0.0
-
-    if temp_c <= config.PUMP_FORCE_OFF_TEMP:
-        cooling_pump.off()
-        return 0.0, temp_c - config.TARGET_TEMP
-
-    if temp_c >= config.PUMP_FULL_ON_TEMP:
-        cooling_pump.set(config.MAX_COOLING_PWM)
-        return 100.0, temp_c - config.TARGET_TEMP
-
-    pid_output, error = pid.update(temp_c)
-    if pid_output <= 0:
-        cooling_pump.off()
-    else:
-        pwm_span = config.MAX_COOLING_PWM - config.MIN_COOLING_PWM
-        cooling_pump.set(config.MIN_COOLING_PWM + (pid_output / 100.0) * pwm_span)
-    return pid_output, error
+def start_web_server():
+    """Launch the web dashboard on a background thread (best-effort)."""
+    try:
+        import _thread
+        import webserver
+        try:
+            _thread.stack_size(16 * 1024)
+        except Exception:
+            pass
+        _thread.start_new_thread(webserver.serve, ())
+        print("Web dashboard thread started")
+    except Exception as e:
+        # No WiFi / no secrets.py / no threads: control loop still runs.
+        print("Web dashboard not started:", e)
 
 
 def update_status_led(temp_c):
     if temp_c is None:
-        led.red()
+        system.led.red()
     elif temp_c < config.LOW_TEMP_LIMIT:
-        led.blue()
+        system.led.blue()
     elif temp_c > config.HIGH_TEMP_LIMIT:
-        led.red()
+        system.led.red()
     else:
-        led.green()
+        system.led.green()
 
 
 def update_oled(temp_c):
-    if oled is None:
+    if system.oled is None:
         return
     try:
+        oled = system.oled
         oled.fill(0)
-        oled.text("DB4 Bio Control", 0, 0)
+        oled.text("DB4 " + system.state["mode"], 0, 0)
         oled.text("Temp: ERROR" if temp_c is None else "T:{:.2f} C".format(temp_c), 0, 12)
-        oled.text("PWM:{}".format(cooling_pump.duty), 0, 24)
-        oled.text("A:{:.2f} W:{:.2f}".format(bio.Am, bio.Wm), 0, 36)
-        oled.text("Alg:{} Was:{}".format(algae_pump.state, waste_pump.state), 0, 48)
+        oled.text("PWM:{}".format(system.cooling_pump.duty), 0, 24)
+        oled.text("A:{:.2f} W:{:.2f}".format(system.bio.Am, system.bio.Wm), 0, 36)
+        oled.text("Alg:{} Was:{}".format(system.algae_pump.state, system.waste_pump.state), 0, 48)
         oled.show()
     except Exception as e:
         print("OLED update error:", e)
 
 
-LOG_HEADER = ("time_s,temp_c,raw_adc,resistance_ohm,target_c,error,pid_output,"
+LOG_HEADER = ("time_s,mode,temp_c,raw_adc,resistance_ohm,target_c,error,pid_output,"
               "cooling_pwm,algae_pump,waste_pump,Am,Aa,Wm,Wa\n")
 
 
 def log_row(f, elapsed, temp_c, raw, resistance, error, pid_output):
-    f.write("{},{},{},{},{},{},{},{},{},{},{},{},{},{}\n".format(
-        int(elapsed),
+    s = system
+    f.write("{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}\n".format(
+        int(elapsed), s.state["mode"],
         "" if temp_c is None else round(temp_c, 3),
         "" if raw is None else round(raw, 1),
         "" if resistance is None else round(resistance, 1),
         config.TARGET_TEMP, round(error, 3), round(pid_output, 3),
-        cooling_pump.duty, algae_pump.state, waste_pump.state,
-        round(bio.Am, 4), round(bio.Aa, 4), round(bio.Wm, 4), round(bio.Wa, 4),
+        s.cooling_pump.duty, s.algae_pump.state, s.waste_pump.state,
+        round(s.bio.Am, 4), round(s.bio.Aa, 4), round(s.bio.Wm, 4), round(s.bio.Wa, 4),
     ))
 
 
 def run():
-    stop_everything()
+    system.stop_everything()
     time.sleep(2)
-    peltier.on()
+    system.peltier.on()
+
+    start_web_server()
 
     print("=" * 40)
     print("DB4 FINAL AUTONOMOUS SYSTEM")
@@ -133,28 +109,38 @@ def run():
     print("Log file:", config.LOG_FILE)
     print("=" * 40)
 
-    start_time = time.time()
     with open(config.LOG_FILE, "w") as f:
         f.write(LOG_HEADER)
 
+    pid_output = 0.0
+    error = 0.0
+
     try:
         while True:
-            elapsed = time.time() - start_time
+            elapsed = time.time() - system.start_time
             if elapsed >= config.RUN_TIME_SECONDS:
                 print("Experiment finished.")
                 break
 
-            raw, resistance, temp_c = thermistor.read()
-            pid_output, error = apply_temperature_control(temp_c)
+            raw, resistance, temp_c = system.read_and_update()
+
+            if system.state["mode"] == "auto":
+                # Autonomous control owns the actuators.
+                pid_output, error = system.autonomous_temperature(temp_c)
+                system.bio.update(elapsed)
+            else:
+                # Manual mode: dashboard owns the actuators, do not override.
+                pid_output = system.state["pid_output"]
+                error = 0.0
+
             update_status_led(temp_c)
-            bio.update(elapsed)
             update_oled(temp_c)
 
-            print("t={}s T={} PWM={} Alg={} Was={} Am={} Wm={}".format(
-                int(elapsed),
+            print("t={}s [{}] T={} PWM={} Alg={} Was={} Am={} Wm={}".format(
+                int(elapsed), system.state["mode"],
                 "ERR" if temp_c is None else round(temp_c, 2),
-                cooling_pump.duty, algae_pump.state, waste_pump.state,
-                round(bio.Am, 3), round(bio.Wm, 3)))
+                system.cooling_pump.duty, system.algae_pump.state,
+                system.waste_pump.state, round(system.bio.Am, 3), round(system.bio.Wm, 3)))
 
             with open(config.LOG_FILE, "a") as f:
                 log_row(f, elapsed, temp_c, raw, resistance, error, pid_output)
@@ -164,7 +150,7 @@ def run():
     except KeyboardInterrupt:
         print("Stopped by user.")
     finally:
-        stop_everything()
+        system.stop_everything()
         print("DB4 SYSTEM STOPPED SAFELY. Log saved as:", config.LOG_FILE)
 
 

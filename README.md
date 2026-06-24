@@ -15,13 +15,14 @@ single source of truth for the pin map and pump polarity.
 db4/
 ├── firmware/              # everything that runs on the ESP32
 │   ├── boot.py            # runs first on power-up: forces all actuators OFF
-│   ├── main.py            # autonomous controller (PID + biological scheduler)
-│   ├── webserver.py       # interactive web dashboard (alternative to main.py)
+│   ├── main.py            # boot entry: control loop + launches the dashboard
+│   ├── webserver.py       # web dashboard (started by main.py on a thread)
 │   ├── web_server_threaded.py # experimental message-based server (|type|msg| protocol)
 │   ├── stop.py            # manual emergency stop — sets every output OFF
 │   ├── config.py          # pin map + all constants (single source of truth)
 │   ├── secrets_example.py # copy to secrets.py and add your WiFi
 │   └── lib/               # drivers (auto-on-path in MicroPython)
+│       ├── system.py      # shared hardware + state (single control authority)
 │       ├── thermistor.py  # 10k NTC temperature
 │       ├── pid.py         # cooling PID controller
 │       ├── actuators.py   # cooling pump, algae/waste pumps, RGB LED
@@ -67,14 +68,21 @@ The same single-flag pattern is used for the algae pump and Peltier relay.
 Flash with VS Code + Pymakr (or `mpremote`/`ampy`). Upload the **contents of
 `firmware/`** to the board root so `boot.py`, `main.py`, and `lib/` sit at `/`.
 
-1. Copy `secrets_example.py` to `secrets.py` and fill in your WiFi (only needed for
-   the web server). `secrets.py` is gitignored so credentials never get committed.
+1. Copy `secrets_example.py` to `secrets.py` and fill in your WiFi (needed for the
+   web dashboard). `secrets.py` is gitignored so credentials never get committed.
 2. Upload `firmware/*` to the ESP32.
 3. Reset the board. `boot.py` forces all actuators OFF, then MicroPython auto-runs
-   `main.py` (autonomous control). To use the web dashboard instead, run
-   `webserver.py` — they share the same pins, so run only one at a time.
+   `main.py`, which **starts the web dashboard on a background thread and then runs
+   the autonomous control loop** — so both run together. If WiFi/`secrets.py` is
+   missing, the control loop still runs and the dashboard is simply skipped.
 
-`main.py` logs temperature, PWM, pump states, and the biological estimates to
+Both share one set of hardware (`lib/system.py`), so they never fight over the pins.
+The dashboard starts in **Auto**: the PID + biological scheduler control everything.
+Pressing **Manual mode** (or any manual pump button) pauses the autonomous control so
+your manual commands stick; **Auto** hands control back; **Emergency Stop** always works.
+`webserver.py` can also be run on its own (it starts in manual mode).
+
+`main.py` logs temperature, mode, PWM, pump states, and the biological estimates to
 `db4_final_log.csv` on the board.
 
 ## Control summary

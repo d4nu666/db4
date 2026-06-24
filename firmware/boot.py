@@ -6,8 +6,21 @@
 # (The old boot.py ran a pump self-test on every boot - removed,
 #  because it started pumps automatically with no supervision.)
 # ============================================================
-
+import sys
 from machine import Pin, PWM
+import os
+
+try:
+    os.chdir("/firmware")
+except OSError:
+    pass
+
+for path in ["/", "/lib", "/firmware", "/firmware/lib"]:
+    if path not in sys.path:
+        sys.path.append(path)
+
+
+
 
 import config
 

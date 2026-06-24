@@ -12,9 +12,7 @@ Pin(config.ALGAE_PUMP_PIN, Pin.OUT).value(config.ALGAE_PUMP_OFF)
 Pin(config.WASTE_PUMP_PIN, Pin.OUT).value(config.WASTE_PUMP_OFF)
 Pin(config.PELTIER_RELAY_PIN, Pin.OUT).value(config.PELTIER_OFF)
 
-# Cooling pump (L298N) off, including PWM.
-Pin(config.COOL_IN1_PIN, Pin.OUT).value(0)
-Pin(config.COOL_IN2_PIN, Pin.OUT).value(0)
+# Cooling pump off (PWM-only on GPIO32).
 try:
     pwm = PWM(Pin(config.COOL_PWM_PIN), freq=config.COOL_PWM_FREQ)
     pwm.duty(0)

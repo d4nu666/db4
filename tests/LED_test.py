@@ -1,9 +1,9 @@
 from machine import Pin
 import time
 
-RED_PIN = 25
+RED_PIN = 27
 GREEN_PIN = 26
-BLUE_PIN = 27
+BLUE_PIN = 25
 
 red = Pin(RED_PIN, Pin.OUT)
 green = Pin(GREEN_PIN, Pin.OUT)

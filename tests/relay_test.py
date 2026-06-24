@@ -1,21 +1,28 @@
 from machine import Pin
 import time
 
-# Use GPIO16 only if it is free
-relay1 = Pin(16, Pin.OUT)
-relay2 = Pin(17, Pin.OUT)
+RELAY_PIN = 16
 
-# Most relay modules are active LOW
-ON = 0
-OFF = 1
+relay_ch2 = Pin(RELAY_PIN, Pin.OUT)
 
-relay1.value(OFF)
-relay2.value(OFF)
-time.sleep(2)
+# 0 = relay ON
+# 1 = relay OFF
+RELAY_ON = 0
+RELAY_OFF = 1
 
-print("Waste pump ON")
-relay1.value(ON)
+# Start OFF for safety
+relay_ch2.value(RELAY_OFF)
+
+print("Relay channel 2 test started")
+print("IN2 connected to GPIO16")
+print("Relay should be OFF now")
 time.sleep(3)
 
-print("Waste pump OFF")
-relay1.value(OFF)
+while True:
+    print("Relay channel 2 ON")
+    relay_ch2.value(RELAY_ON)
+    time.sleep(3)
+
+    print("Relay channel 2 OFF")
+    relay_ch2.value(RELAY_OFF)
+    time.sleep(3)

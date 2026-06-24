@@ -7,7 +7,7 @@
 #  because it started pumps automatically with no supervision.)
 # ============================================================
 
-from machine import Pin
+from machine import Pin, PWM
 
 import config
 
@@ -15,8 +15,11 @@ import config
 Pin(config.ALGAE_PUMP_PIN, Pin.OUT).value(config.ALGAE_PUMP_OFF)
 Pin(config.WASTE_PUMP_PIN, Pin.OUT).value(config.WASTE_PUMP_OFF)
 Pin(config.PELTIER_RELAY_PIN, Pin.OUT).value(config.PELTIER_OFF)
-Pin(config.COOL_IN1_PIN, Pin.OUT).value(0)
-Pin(config.COOL_IN2_PIN, Pin.OUT).value(0)
+
+# Cooling pump is PWM-only on GPIO32 - force duty to 0.
+_cool = PWM(Pin(config.COOL_PWM_PIN), freq=config.COOL_PWM_FREQ)
+_cool.duty(0)
+_cool.deinit()
 
 print("DB4 boot: actuators set to safe OFF state.")
 

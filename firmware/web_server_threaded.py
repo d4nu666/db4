@@ -7,12 +7,11 @@
 #   SendMessage(messageType, message)
 # The web page must handle the |type|message| request protocol.
 #
-# NOTE: this is the message-based server experiment. Its pin map
-# (heat_relay=GPIO16, fan_relay=GPIO17, pump=GPIO18) predates
-# config.py and differs from it (config.py uses GPIO16 = waste
-# pump, GPIO17 = peltier). Reconcile the pins with config.py
-# before running this on the real hardware. WiFi credentials now
-# come from secrets.py instead of being hardcoded.
+# NOTE: this is the message-based server experiment. Pins now come
+# from config.py (single source of truth). Protocol mapping on the
+# current hardware: the FAN command drives the single relay
+# (GPIO16, Peltier/cooling) and the PUMP command drives the algae
+# pump (GPIO23). WiFi credentials come from secrets.py.
 # =========================
 
 import network
@@ -20,36 +19,32 @@ import socket
 import time
 from machine import Pin, I2C
 
+import config
+
 try:
     from secrets import WIFI_SSID, WIFI_PASSWORD
 except ImportError:
     raise ImportError("Create secrets.py from secrets_example.py with your WiFi details.")
 
 # =========================
-# PINS - see note above; reconcile with config.py before use
+# PINS - all sourced from config.py
 # =========================
 
-# Relay module
-heat_relay = Pin(16, Pin.OUT)   # Relay IN1
-fan_relay = Pin(17, Pin.OUT)    # Relay IN2
-
-# Relay is ACTIVE LOW:
-# 0 = ON
-# 1 = OFF
-heat_relay.value(1)     # OFF at start
-fan_relay.value(0)      # Fan ON at start
+# Single relay channel (Peltier / cooling), active LOW.
+relay = Pin(config.PELTIER_RELAY_PIN, Pin.OUT)
+relay.value(config.PELTIER_OFF)     # OFF at start
 
 # RGB LED pins
-red = Pin(25, Pin.OUT)
-green = Pin(26, Pin.OUT)
-blue = Pin(27, Pin.OUT)
+red = Pin(config.LED_R_PIN, Pin.OUT)
+green = Pin(config.LED_G_PIN, Pin.OUT)
+blue = Pin(config.LED_B_PIN, Pin.OUT)
 
-# Pump / L298N control pin
-pump = Pin(18, Pin.OUT)
-pump.value(0)
+# Pump control (mapped to the algae pump on this hardware).
+pump = Pin(config.ALGAE_PUMP_PIN, Pin.OUT)
+pump.value(config.ALGAE_PUMP_OFF)
 
 # I2C: OLED + TCS34725
-i2c = I2C(0, scl=Pin(22), sda=Pin(21), freq=400000)
+i2c = I2C(0, scl=Pin(config.I2C_SCL), sda=Pin(config.I2C_SDA), freq=config.I2C_FREQ)
 
 # =========================
 # SYSTEM STATE
@@ -57,7 +52,7 @@ i2c = I2C(0, scl=Pin(22), sda=Pin(21), freq=400000)
 
 system_state = {
     "pump": "OFF",
-    "fan": "ON",
+    "fan": "OFF",
     "heat": "OFF",
     "rgb": "OFF",
     "temperature": "N/A",
@@ -109,28 +104,20 @@ def rgb_white():
 # =========================
 
 def pump_on():
-    pump.value(1)
+    pump.value(config.ALGAE_PUMP_ON)
     system_state["pump"] = "ON"
 
 def pump_off():
-    pump.value(0)
+    pump.value(config.ALGAE_PUMP_OFF)
     system_state["pump"] = "OFF"
 
 def fan_on():
-    fan_relay.value(0)
+    relay.value(config.PELTIER_ON)
     system_state["fan"] = "ON"
 
 def fan_off():
-    fan_relay.value(1)
+    relay.value(config.PELTIER_OFF)
     system_state["fan"] = "OFF"
-
-def heat_on():
-    heat_relay.value(0)
-    system_state["heat"] = "ON"
-
-def heat_off():
-    heat_relay.value(1)
-    system_state["heat"] = "OFF"
 
 # =========================
 # SENSOR UPDATE

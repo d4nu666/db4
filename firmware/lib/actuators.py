@@ -9,11 +9,9 @@ import config
 
 
 class CoolingPump:
-    """Cooling water pump on an L298N driver (PWM speed control)."""
+    """Cooling water pump on GPIO32 (PWM-only, no IN1/IN2 direction pins)."""
 
     def __init__(self):
-        self.in1 = Pin(config.COOL_IN1_PIN, Pin.OUT)
-        self.in2 = Pin(config.COOL_IN2_PIN, Pin.OUT)
         self.pwm = PWM(Pin(config.COOL_PWM_PIN), freq=config.COOL_PWM_FREQ)
         self.duty = 0
         self.off()
@@ -22,17 +20,10 @@ class CoolingPump:
         """Set pump speed. duty is clamped to [0, PWM_MAX]."""
         duty = int(max(0, min(config.PWM_MAX, duty)))
         self.duty = duty
-        if duty <= 0:
-            self.off()
-            return
-        self.in1.value(1)
-        self.in2.value(0)
         self.pwm.duty(duty)
 
     def off(self):
         self.pwm.duty(0)
-        self.in1.value(0)
-        self.in2.value(0)
         self.duty = 0
 
     @property

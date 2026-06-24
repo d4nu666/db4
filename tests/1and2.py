@@ -3,7 +3,7 @@ import time
 
 
 ALGAE_PIN = 23
-WASTE_PIN = 15
+WASTE_PIN = 19
 
 algae_pump = Pin(ALGAE_PIN, Pin.OUT)
 waste_pump = Pin(WASTE_PIN, Pin.OUT)
@@ -11,8 +11,8 @@ waste_pump = Pin(WASTE_PIN, Pin.OUT)
 
 # 1 = pump ON
 # 0 = pump OFF
-ON = 1
-OFF = 0
+ON = 0
+OFF = 1
 
 def algae_on():
     algae_pump.value(ON)

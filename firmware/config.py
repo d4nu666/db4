@@ -21,36 +21,32 @@ NOMINAL_TEMPERATURE = 25.0   # T0  (degC)
 BETA = 3950                  # beta coefficient
 ADC_MAX = 4095               # 12-bit ADC
 
-# ---- Cooling pump on L298N (PWM) ----
-COOL_IN1_PIN = 18
-COOL_IN2_PIN = 19
+# ---- Cooling pump on GPIO32 (PWM only, no IN1/IN2 direction pins) ----
 COOL_PWM_PIN = 32
 COOL_PWM_FREQ = 1000
 PWM_MAX = 1023
 
-# ---- Algae pump on L9110S (single input, ON/OFF, active HIGH) ----
+# ---- Algae pump on L9110S (single input, ON/OFF) ----
+# If the pump runs inverted, swap ON / OFF.
 ALGAE_PUMP_PIN = 23
-ALGAE_PUMP_ON = 1
-ALGAE_PUMP_OFF = 0
+ALGAE_PUMP_ON = 0
+ALGAE_PUMP_OFF = 1
 
-# ---- Waste pump on GPIO16 ----
-# NOTE: the connections report lists GPIO16 as an L9110S input
-# (active HIGH), but the tested code drives it as an ACTIVE-LOW
-# relay. The tested behaviour is kept as default. If the waste
-# pump logic is reversed on your board, swap these two values.
-WASTE_PUMP_PIN = 16
-WASTE_PUMP_ON = 0            # active-low relay: 0 = ON
+# ---- Waste pump on GPIO19 (L9110S, single input, ON/OFF) ----
+# If the pump runs inverted, swap ON / OFF.
+WASTE_PUMP_PIN = 19
+WASTE_PUMP_ON = 0
 WASTE_PUMP_OFF = 1
 
-# ---- Peltier / fan relay (optional, active LOW) ----
-PELTIER_RELAY_PIN = 17
+# ---- Relay channel on GPIO16 (Peltier / cooling relay, active LOW) ----
+PELTIER_RELAY_PIN = 16
 PELTIER_ON = 0
 PELTIER_OFF = 1
 
 # ---- RGB LED (HW-479 / KY-016) - OD illumination + status ----
-LED_R_PIN = 25
+LED_R_PIN = 27
 LED_G_PIN = 26
-LED_B_PIN = 27
+LED_B_PIN = 25
 
 # ============================================================
 # Temperature control

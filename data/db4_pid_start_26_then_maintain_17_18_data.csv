@@ -1,0 +1,218 @@
+time_min,time_h,setpoint_c,water_temperature_c,temperature_error_c,cooling_pwm_0_1023,peltier_state,cooling_state,status
+0,0.0,17.75,26.0,-8.25,1023,ON,High cooling,Cooling down
+5,0.083,17.75,25.779,-8.029,1023,ON,High cooling,Cooling down
+10,0.167,17.75,25.562,-7.812,1023,ON,High cooling,Cooling down
+15,0.25,17.75,25.348,-7.598,1023,ON,High cooling,Cooling down
+20,0.333,17.75,25.134,-7.384,1023,ON,High cooling,Cooling down
+25,0.417,17.75,24.92,-7.17,1023,ON,High cooling,Cooling down
+30,0.5,17.75,24.708,-6.958,1023,ON,High cooling,Cooling down
+35,0.583,17.75,24.499,-6.749,1023,ON,High cooling,Cooling down
+40,0.667,17.75,24.295,-6.545,1023,ON,High cooling,Cooling down
+45,0.75,17.75,24.099,-6.349,1023,ON,High cooling,Cooling down
+50,0.833,17.75,23.911,-6.161,1023,ON,High cooling,Cooling down
+55,0.917,17.75,23.734,-5.984,1023,ON,High cooling,Cooling down
+60,1.0,17.75,23.568,-5.818,1023,ON,High cooling,Cooling down
+65,1.083,17.75,23.411,-5.661,1023,ON,High cooling,Cooling down
+70,1.167,17.75,23.262,-5.512,1023,ON,High cooling,Cooling down
+75,1.25,17.75,23.119,-5.369,1023,ON,High cooling,Cooling down
+80,1.333,17.75,22.979,-5.229,1023,ON,High cooling,Cooling down
+85,1.417,17.75,22.839,-5.089,1023,ON,High cooling,Cooling down
+90,1.5,17.75,22.698,-4.948,1023,ON,High cooling,Cooling down
+95,1.583,17.75,22.556,-4.806,1023,ON,High cooling,Cooling down
+100,1.667,17.75,22.413,-4.663,1023,ON,High cooling,Cooling down
+105,1.75,17.75,22.27,-4.52,1023,ON,High cooling,Cooling down
+110,1.833,17.75,22.129,-4.379,1023,ON,High cooling,Cooling down
+115,1.917,17.75,21.993,-4.243,1023,ON,High cooling,Cooling down
+120,2.0,17.75,21.863,-4.113,1023,ON,High cooling,Cooling down
+125,2.083,17.75,21.742,-3.992,1023,ON,High cooling,Cooling down
+130,2.167,17.75,21.63,-3.88,1023,ON,High cooling,Cooling down
+135,2.25,17.75,21.526,-3.776,1023,ON,High cooling,Cooling down
+140,2.333,17.75,21.43,-3.68,1023,ON,High cooling,Cooling down
+145,2.417,17.75,21.338,-3.588,1023,ON,High cooling,Cooling down
+150,2.5,17.75,21.249,-3.499,1023,ON,High cooling,Cooling down
+155,2.583,17.75,21.16,-3.41,1023,ON,High cooling,Cooling down
+160,2.667,17.75,21.069,-3.319,1023,ON,High cooling,Cooling down
+165,2.75,17.75,20.975,-3.225,1023,ON,High cooling,Cooling down
+170,2.833,17.75,20.879,-3.129,1023,ON,High cooling,Cooling down
+175,2.917,17.75,20.78,-3.03,1023,ON,High cooling,Cooling down
+180,3.0,17.75,20.682,-2.932,1023,ON,High cooling,Cooling down
+185,3.083,17.75,20.586,-2.836,1023,ON,High cooling,Cooling down
+190,3.167,17.75,20.495,-2.745,1023,ON,High cooling,Cooling down
+195,3.25,17.75,20.411,-2.661,1023,ON,High cooling,Cooling down
+200,3.333,17.75,20.334,-2.584,1023,ON,High cooling,Cooling down
+205,3.417,17.75,20.265,-2.515,1023,ON,High cooling,Cooling down
+210,3.5,17.75,20.203,-2.453,1023,ON,High cooling,Cooling down
+215,3.583,17.75,20.145,-2.395,1023,ON,High cooling,Cooling down
+220,3.667,17.75,20.09,-2.34,1023,ON,High cooling,Cooling down
+225,3.75,17.75,20.035,-2.285,1023,ON,High cooling,Cooling down
+230,3.833,17.75,19.978,-2.228,796,ON,Approaching range,Cooling down
+235,3.917,17.75,19.917,-2.167,788,ON,Approaching range,Cooling down
+240,4.0,17.75,19.853,-2.103,779,ON,Approaching range,Cooling down
+245,4.083,17.75,19.785,-2.035,769,ON,Approaching range,Cooling down
+250,4.167,17.75,19.716,-1.966,760,ON,Approaching range,Cooling down
+255,4.25,17.75,19.648,-1.898,750,ON,Approaching range,Cooling down
+260,4.333,17.75,19.582,-1.832,741,ON,Approaching range,Cooling down
+265,4.417,17.75,19.522,-1.772,733,ON,Approaching range,Cooling down
+270,4.5,17.75,19.468,-1.718,725,ON,Approaching range,Cooling down
+275,4.583,17.75,19.421,-1.671,718,ON,Approaching range,Cooling down
+280,4.667,17.75,19.381,-1.631,713,ON,Approaching range,Cooling down
+285,4.75,17.75,19.346,-1.596,708,ON,Approaching range,Cooling down
+290,4.833,17.75,19.313,-1.563,703,ON,Approaching range,Cooling down
+295,4.917,17.75,19.281,-1.531,699,ON,Approaching range,Cooling down
+300,5.0,17.75,19.247,-1.497,694,ON,Approaching range,Cooling down
+305,5.083,17.75,19.209,-1.459,689,ON,Approaching range,Cooling down
+310,5.167,17.75,19.167,-1.417,683,ON,Approaching range,Cooling down
+315,5.25,17.75,19.121,-1.371,676,ON,Approaching range,Cooling down
+320,5.333,17.75,19.072,-1.322,670,ON,Approaching range,Cooling down
+325,5.417,17.75,19.022,-1.272,663,ON,Approaching range,Cooling down
+330,5.5,17.75,18.973,-1.223,656,ON,Approaching range,Cooling down
+335,5.583,17.75,18.929,-1.179,649,ON,Approaching range,Cooling down
+340,5.667,17.75,18.89,-1.14,644,ON,Approaching range,Cooling down
+345,5.75,17.75,18.857,-1.107,639,ON,Approaching range,Cooling down
+350,5.833,17.75,18.831,-1.081,636,ON,Approaching range,Cooling down
+355,5.917,17.75,18.81,-1.06,633,ON,Approaching range,Cooling down
+360,6.0,17.75,18.792,-1.042,630,ON,Approaching range,Cooling down
+365,6.083,17.75,18.775,-1.025,628,ON,Approaching range,Cooling down
+370,6.167,17.75,18.757,-1.007,625,ON,Approaching range,Cooling down
+375,6.25,17.75,18.735,-0.985,622,ON,Approaching range,Cooling down
+380,6.333,17.75,18.708,-0.958,619,ON,Approaching range,Cooling down
+385,6.417,17.75,18.677,-0.927,614,ON,Approaching range,Cooling down
+390,6.5,17.75,18.642,-0.892,609,ON,Approaching range,Cooling down
+395,6.583,17.75,18.605,-0.855,604,ON,Approaching range,Cooling down
+400,6.667,17.75,18.568,-0.818,599,ON,Approaching range,Cooling down
+405,6.75,17.75,18.533,-0.783,594,ON,Approaching range,Cooling down
+410,6.833,17.75,18.504,-0.754,590,ON,Approaching range,Cooling down
+415,6.917,17.75,18.48,-0.73,587,ON,Approaching range,Cooling down
+420,7.0,17.75,18.462,-0.712,584,ON,Approaching range,Cooling down
+425,7.083,17.75,18.45,-0.7,583,ON,Approaching range,Cooling down
+430,7.167,17.75,18.442,-0.692,581,ON,Approaching range,Cooling down
+435,7.25,17.75,18.435,-0.685,580,ON,Approaching range,Cooling down
+440,7.333,17.75,18.427,-0.677,579,ON,Approaching range,Cooling down
+445,7.417,17.75,18.417,-0.667,578,ON,Approaching range,Cooling down
+450,7.5,17.75,18.401,-0.651,576,ON,Approaching range,Cooling down
+455,7.583,17.75,18.381,-0.631,573,ON,Approaching range,Cooling down
+460,7.667,17.75,18.356,-0.606,569,ON,Approaching range,Cooling down
+465,7.75,17.75,18.328,-0.578,565,ON,Approaching range,Cooling down
+470,7.833,17.75,18.299,-0.549,561,ON,Approaching range,Cooling down
+475,7.917,17.75,18.271,-0.521,557,ON,Approaching range,Cooling down
+480,8.0,17.75,18.247,-0.497,554,ON,Approaching range,Cooling down
+485,8.083,17.75,18.228,-0.478,551,ON,Approaching range,Cooling down
+490,8.167,17.75,18.215,-0.465,550,ON,Approaching range,Cooling down
+495,8.25,17.75,18.208,-0.458,549,ON,Approaching range,Cooling down
+500,8.333,17.75,18.206,-0.456,548,ON,Approaching range,Cooling down
+505,8.417,17.75,18.206,-0.456,548,ON,Approaching range,Cooling down
+510,8.5,17.75,18.205,-0.455,548,ON,Approaching range,Cooling down
+515,8.583,17.75,17.791,-0.041,171,ON,Maintaining,Ideal range
+520,8.667,17.75,17.839,-0.089,221,ON,Maintaining,Ideal range
+525,8.75,17.75,17.852,-0.102,241,ON,Maintaining,Ideal range
+530,8.833,17.75,17.816,-0.066,219,ON,Maintaining,Ideal range
+535,8.917,17.75,17.808,-0.058,221,ON,Maintaining,Ideal range
+540,9.0,17.75,17.813,-0.063,236,ON,Maintaining,Ideal range
+545,9.083,17.75,17.816,-0.066,249,ON,Maintaining,Ideal range
+550,9.167,17.75,17.857,-0.107,296,ON,Maintaining,Ideal range
+555,9.25,17.75,17.897,-0.147,342,ON,Maintaining,Ideal range
+560,9.333,17.75,17.89,-0.14,344,ON,Maintaining,Ideal range
+565,9.417,17.75,17.876,-0.126,339,ON,Maintaining,Ideal range
+570,9.5,17.75,17.871,-0.121,340,ON,Maintaining,Ideal range
+575,9.583,17.75,17.871,-0.121,345,ON,Maintaining,Ideal range
+580,9.667,17.75,17.822,-0.072,303,ON,Maintaining,Ideal range
+585,9.75,17.75,17.761,-0.011,250,ON,Maintaining,Ideal range
+590,9.833,17.75,17.766,-0.016,253,ON,Maintaining,Ideal range
+595,9.917,17.75,17.731,0.019,236,ON,Maintaining,Ideal range
+600,10.0,17.75,17.748,0.002,231,ON,Maintaining,Ideal range
+605,10.083,17.75,17.787,-0.037,258,ON,Maintaining,Ideal range
+610,10.167,17.75,17.724,0.026,218,ON,Maintaining,Ideal range
+615,10.25,17.75,17.727,0.023,210,ON,Maintaining,Ideal range
+620,10.333,17.75,17.691,0.059,200,OFF,Maintaining,Ideal range
+625,10.417,17.75,17.625,0.125,190,OFF,Maintaining,Ideal range
+630,10.5,17.75,17.579,0.171,180,OFF,Maintaining,Ideal range
+635,10.583,17.75,17.61,0.14,169,OFF,Maintaining,Ideal range
+640,10.667,17.75,17.615,0.135,159,OFF,Maintaining,Ideal range
+645,10.75,17.75,17.637,0.113,150,OFF,Maintaining,Ideal range
+650,10.833,17.75,17.653,0.097,141,OFF,Maintaining,Ideal range
+655,10.917,17.75,17.665,0.085,134,OFF,Maintaining,Ideal range
+660,11.0,17.75,17.687,0.063,128,OFF,Maintaining,Ideal range
+665,11.083,17.75,17.652,0.098,123,OFF,Maintaining,Ideal range
+670,11.167,17.75,17.622,0.128,120,OFF,Maintaining,Ideal range
+675,11.25,17.75,17.637,0.113,120,OFF,Maintaining,Ideal range
+680,11.333,17.75,17.649,0.101,120,OFF,Maintaining,Ideal range
+685,11.417,17.75,17.673,0.077,123,OFF,Maintaining,Ideal range
+690,11.5,17.75,17.724,0.026,128,ON,Maintaining,Ideal range
+695,11.583,17.75,17.813,-0.063,190,ON,Maintaining,Ideal range
+700,11.667,17.75,17.821,-0.071,205,ON,Maintaining,Ideal range
+705,11.75,17.75,17.808,-0.058,202,ON,Maintaining,Ideal range
+710,11.833,17.75,17.833,-0.083,233,ON,Maintaining,Ideal range
+715,11.917,17.75,17.818,-0.068,230,ON,Maintaining,Ideal range
+720,12.0,17.75,17.832,-0.082,253,ON,Maintaining,Ideal range
+725,12.083,17.75,17.803,-0.053,238,ON,Maintaining,Ideal range
+730,12.167,17.75,17.842,-0.092,283,ON,Maintaining,Ideal range
+735,12.25,17.75,17.881,-0.131,328,ON,Maintaining,Ideal range
+740,12.333,17.75,17.91,-0.16,362,ON,Maintaining,Ideal range
+745,12.417,17.75,17.905,-0.155,365,ON,Maintaining,Ideal range
+750,12.5,17.75,17.86,-0.11,330,ON,Maintaining,Ideal range
+755,12.583,17.75,17.851,-0.101,327,ON,Maintaining,Ideal range
+760,12.667,17.75,17.814,-0.064,296,ON,Maintaining,Ideal range
+765,12.75,17.75,17.759,-0.009,247,ON,Maintaining,Ideal range
+770,12.833,17.75,17.76,-0.01,247,ON,Maintaining,Ideal range
+775,12.917,17.75,17.734,0.016,236,ON,Maintaining,Ideal range
+780,13.0,17.75,17.745,0.005,231,ON,Maintaining,Ideal range
+785,13.083,17.75,17.751,-0.001,226,ON,Maintaining,Ideal range
+790,13.167,17.75,17.738,0.012,218,ON,Maintaining,Ideal range
+795,13.25,17.75,17.733,0.017,210,ON,Maintaining,Ideal range
+800,13.333,17.75,17.681,0.069,200,OFF,Maintaining,Ideal range
+805,13.417,17.75,17.638,0.112,190,OFF,Maintaining,Ideal range
+810,13.5,17.75,17.648,0.102,180,OFF,Maintaining,Ideal range
+815,13.583,17.75,17.629,0.121,169,OFF,Maintaining,Ideal range
+820,13.667,17.75,17.583,0.167,159,OFF,Maintaining,Ideal range
+825,13.75,17.75,17.625,0.125,149,OFF,Maintaining,Ideal range
+830,13.833,17.75,17.64,0.11,141,OFF,Maintaining,Ideal range
+835,13.917,17.75,17.709,0.041,134,OFF,Maintaining,Ideal range
+840,14.0,17.75,17.653,0.097,128,OFF,Maintaining,Ideal range
+845,14.083,17.75,17.659,0.091,123,OFF,Maintaining,Ideal range
+850,14.167,17.75,17.63,0.12,120,OFF,Maintaining,Ideal range
+855,14.25,17.75,17.623,0.127,120,OFF,Maintaining,Ideal range
+860,14.333,17.75,17.694,0.056,120,OFF,Maintaining,Ideal range
+865,14.417,17.75,17.726,0.024,123,ON,Maintaining,Ideal range
+870,14.5,17.75,17.738,0.012,128,ON,Maintaining,Ideal range
+875,14.583,17.75,17.785,-0.035,165,ON,Maintaining,Ideal range
+880,14.667,17.75,17.877,-0.127,255,ON,Maintaining,Ideal range
+885,14.75,17.75,17.872,-0.122,259,ON,Maintaining,Ideal range
+890,14.833,17.75,17.873,-0.123,270,ON,Maintaining,Ideal range
+895,14.917,17.75,17.852,-0.102,261,ON,Maintaining,Ideal range
+900,15.0,17.75,17.799,-0.049,224,ON,Maintaining,Ideal range
+905,15.083,17.75,17.86,-0.11,289,ON,Maintaining,Ideal range
+910,15.167,17.75,17.789,-0.039,235,ON,Maintaining,Ideal range
+915,15.25,17.75,17.889,-0.139,335,ON,Maintaining,Ideal range
+920,15.333,17.75,17.889,-0.139,343,ON,Maintaining,Ideal range
+925,15.417,17.75,17.9,-0.15,361,ON,Maintaining,Ideal range
+930,15.5,17.75,17.911,-0.161,376,ON,Maintaining,Ideal range
+935,15.583,17.75,17.846,-0.096,322,ON,Maintaining,Ideal range
+940,15.667,17.75,17.834,-0.084,314,ON,Maintaining,Ideal range
+945,15.75,17.75,17.768,-0.018,256,ON,Maintaining,Ideal range
+950,15.833,17.75,17.734,0.016,239,ON,Maintaining,Ideal range
+955,15.917,17.75,17.733,0.017,236,ON,Maintaining,Ideal range
+960,16.0,17.75,17.741,0.009,231,ON,Maintaining,Ideal range
+965,16.083,17.75,17.783,-0.033,255,ON,Maintaining,Ideal range
+970,16.167,17.75,17.712,0.038,218,OFF,Maintaining,Ideal range
+975,16.25,17.75,17.72,0.03,210,OFF,Maintaining,Ideal range
+980,16.333,17.75,17.681,0.069,200,OFF,Maintaining,Ideal range
+985,16.417,17.75,17.634,0.116,190,OFF,Maintaining,Ideal range
+990,16.5,17.75,17.581,0.169,179,OFF,Maintaining,Ideal range
+995,16.583,17.75,17.606,0.144,169,OFF,Maintaining,Ideal range
+1000,16.667,17.75,17.584,0.166,159,OFF,Maintaining,Ideal range
+1005,16.75,17.75,17.629,0.121,150,OFF,Maintaining,Ideal range
+1010,16.833,17.75,17.617,0.133,141,OFF,Maintaining,Ideal range
+1015,16.917,17.75,17.655,0.095,134,OFF,Maintaining,Ideal range
+1020,17.0,17.75,17.691,0.059,128,OFF,Maintaining,Ideal range
+1025,17.083,17.75,17.673,0.077,123,OFF,Maintaining,Ideal range
+1030,17.167,17.75,17.678,0.072,120,OFF,Maintaining,Ideal range
+1035,17.25,17.75,17.658,0.092,120,OFF,Maintaining,Ideal range
+1040,17.333,17.75,17.668,0.082,120,OFF,Maintaining,Ideal range
+1045,17.417,17.75,17.698,0.052,123,OFF,Maintaining,Ideal range
+1050,17.5,17.75,17.737,0.013,128,ON,Maintaining,Ideal range
+1055,17.583,17.75,17.854,-0.104,227,ON,Maintaining,Ideal range
+1060,17.667,17.75,17.854,-0.104,235,ON,Maintaining,Ideal range
+1065,17.75,17.75,17.886,-0.136,272,ON,Maintaining,Ideal range
+1070,17.833,17.75,17.861,-0.111,259,ON,Maintaining,Ideal range
+1075,17.917,17.75,17.813,-0.063,225,ON,Maintaining,Ideal range
+1080,18.0,17.75,17.809,-0.059,232,ON,Maintaining,Ideal range

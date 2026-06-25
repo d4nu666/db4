@@ -1,17 +1,3 @@
-# ============================================================
-# DB4 web control dashboard.
-#
-# Serves a control page over WiFi and exposes /data JSON. Operates
-# on the shared hardware/state in system.py, so it never fights
-# main.py over the pins.
-#
-# Normally started by main.py on a background thread (serve()).
-# Can also be run standalone, in which case it refreshes the
-# sensors itself and starts in manual mode.
-#
-# WiFi credentials come from secrets.py.
-# ============================================================
-
 import network
 import socket
 import time
@@ -91,6 +77,11 @@ def web_page():
             <div class="small">Target: <span id="target_temp">--</span> C</div>
         </div>
         <div class="card">
+            <div class="small">Algae concentration</div>
+            <div class="value"><span id="algae_cells">--</span></div>
+            <div class="small">cells/mL &nbsp; OD: <span id="algae_od">--</span></div>
+        </div>
+        <div class="card">
             <div class="small">System Mode</div>
             <div class="value" id="mode">--</div>
             <button class="blue" onclick="sendCommand('/auto')">AUTO TEMP CONTROL</button>
@@ -107,6 +98,7 @@ def web_page():
             <div class="value" id="cooling_pump">--</div>
             <button class="on" onclick="sendCommand('/cooling_pump_on')">Cooling Pump ON</button>
             <button class="off" onclick="sendCommand('/cooling_pump_off')">Cooling Pump OFF</button>
+            <div class="small" style="margin-top:8px;">Peltier: <span id="peltier">--</span></div>
         </div>
         <div class="card">
             <div class="small">Cooling Pump PWM</div>
@@ -125,6 +117,14 @@ def web_page():
             <button class="danger" onclick="sendCommand('/stop')">EMERGENCY STOP ALL</button>
             <div class="small" style="margin-top:12px;">Uptime: <span id="uptime">--</span> s</div>
         </div>
+        <div class="card">
+            <div class="small">Data Logging</div>
+            <div class="value"><span id="log_rows">--</span></div>
+            <div class="small">samples in <span id="log_file">--</span></div>
+            <button class="blue" onclick="downloadData()">⬇ Download current run</button>
+            <div class="small" style="margin-top:12px;">All saved runs:</div>
+            <div id="loglist" class="small">--</div>
+        </div>
     </div>
 <script>
 function onOffText(v){ return v ? '<span class="status-on">ON</span>' : '<span class="status-off">OFF</span>'; }
@@ -139,12 +139,28 @@ function updateData(){
         document.getElementById('algae_pump').innerHTML = onOffText(d.algae_pump);
         document.getElementById('waste_pump').innerHTML = onOffText(d.waste_pump);
         document.getElementById('uptime').innerHTML = d.uptime_s;
+        document.getElementById('log_rows').innerHTML = d.log_rows;
+        document.getElementById('log_file').innerHTML = d.log_file || '--';
+        document.getElementById('algae_cells').innerHTML = (d.algae_cells==null?'n/a':d.algae_cells);
+        document.getElementById('algae_od').innerHTML = (d.algae_od==null?'--':d.algae_od);
+        document.getElementById('peltier').innerHTML = onOffText(d.peltier);
     }).catch(e=>console.log("Update failed:", e));
 }
 function sendCommand(url){ fetch(url).then(r=>r.text()).then(_=>updateData()); }
 function setPWM(){ sendCommand('/set_pwm?pwm=' + document.getElementById('pwm_input').value); }
+function downloadData(){ window.location.href='/download'; }
+function refreshLogs(){
+    fetch('/logs').then(r=>r.json()).then(list=>{
+        var h='';
+        list.forEach(function(f){
+            h += '<div><a style="color:#60a5fa" href="/download?file='+f.name+'">'+f.name+'</a> ('+Math.round(f.size/1024)+' KB)</div>';
+        });
+        document.getElementById('loglist').innerHTML = h || 'none yet';
+    }).catch(function(e){});
+}
 setInterval(updateData, 1000);
-updateData();
+setInterval(refreshLogs, 5000);
+updateData(); refreshLogs();
 </script>
 </body>
 </html>
@@ -155,6 +171,68 @@ updateData();
 def send_response(client, content, content_type="text/html"):
     client.send("HTTP/1.1 200 OK\r\nContent-Type: %s\r\nConnection: close\r\n\r\n" % content_type)
     client.send(content if isinstance(content, (bytes, bytearray)) else content.encode())
+
+
+def _send_all(client, data):
+    """Send every byte (socket.send may write only part of a buffer)."""
+    if isinstance(data, str):
+        data = data.encode()
+    mv = memoryview(data)
+    while mv:
+        n = client.send(mv)
+        if not n:
+            n = len(mv)
+        mv = mv[n:]
+
+
+def list_logs():
+    """Return [{'name','size'}] for every run log on the board, newest first."""
+    out = []
+    try:
+        for name in os.listdir():
+            if name.startswith(config.LOG_PREFIX) and name.endswith(".csv"):
+                try:
+                    size = os.stat(name)[6]
+                except OSError:
+                    size = 0
+                out.append({"name": name, "size": size})
+    except OSError:
+        pass
+    out.sort(key=lambda f: f["name"], reverse=True)
+    return out
+
+
+def serve_download(client, path):
+    """Stream a CSV log to the browser as a download.
+    /download           -> the current run's file
+    /download?file=NAME -> a specific run's file
+    """
+    name = get_query_value(path, "file")
+    if name:
+        # reject anything that isn't a plain log file in this folder
+        if "/" in name or ".." in name or not name.endswith(".csv"):
+            _send_all(client, "HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\nbad filename")
+            return
+    else:
+        name = system.state.get("log_file") or config.LOG_FILE
+
+    try:
+        f = open(name, "rb")
+    except OSError:
+        _send_all(client, "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\n"
+                          "Connection: close\r\n\r\nNo log file on the board yet.")
+        return
+    _send_all(client, "HTTP/1.1 200 OK\r\nContent-Type: text/csv\r\n"
+                      'Content-Disposition: attachment; filename="%s"\r\n' % name +
+                      "Connection: close\r\n\r\n")
+    try:
+        while True:
+            chunk = f.read(512)
+            if not chunk:
+                break
+            _send_all(client, chunk)
+    finally:
+        f.close()
 
 
 def get_path(request):
@@ -201,6 +279,8 @@ def handle(path):
         return web_page(), "text/html"
     if path.startswith("/data"):
         return json.dumps(system.state), "application/json"
+    if path.startswith("/logs"):
+        return json.dumps(list_logs()), "application/json"
     if path.startswith("/auto"):
         system.set_mode("auto")
         return "AUTO MODE", "text/html"
@@ -249,8 +329,11 @@ def serve():
             client, _ = server.accept()
             request = client.recv(1024).decode()
             path = get_path(request)
-            content, ctype = handle(path)
-            send_response(client, content, ctype)
+            if path.startswith("/download"):
+                serve_download(client, path)
+            else:
+                content, ctype = handle(path)
+                send_response(client, content, ctype)
         except OSError:
             pass  # accept() timeout - lets the loop breathe
         except Exception as e:

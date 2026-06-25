@@ -80,79 +80,175 @@ def update_oled(temp_c):
 
 
 LOG_HEADER = ("time_s,mode,temp_c,raw_adc,resistance_ohm,target_c,error,pid_output,"
-              "cooling_pwm,algae_pump,waste_pump,Am,Aa,Wm,Wa\n")
+              "cooling_pwm,algae_pump,waste_pump,peltier,algae_od,algae_cells,"
+              "Am,Aa,Wm,Wa\n")
 
 
 def log_row(f, elapsed, temp_c, raw, resistance, error, pid_output):
     s = system
-    f.write("{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}\n".format(
+    od = s.state["algae_od"]
+    cells = s.state["algae_cells"]
+    f.write("{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}\n".format(
         int(elapsed), s.state["mode"],
         "" if temp_c is None else round(temp_c, 3),
         "" if raw is None else round(raw, 1),
         "" if resistance is None else round(resistance, 1),
         config.TARGET_TEMP, round(error, 3), round(pid_output, 3),
-        s.cooling_pump.duty, s.algae_pump.state, s.waste_pump.state,
+        s.cooling_pump.duty, s.algae_pump.state, s.waste_pump.state, s.peltier.state,
+        "" if od is None else od, "" if cells is None else cells,
         round(s.bio.Am, 4), round(s.bio.Aa, 4), round(s.bio.Wm, 4), round(s.bio.Wa, 4),
     ))
+
+
+def _log_num(name):
+    try:
+        return int(name[len(config.LOG_PREFIX):-4])
+    except ValueError:
+        return -1
+
+
+def _all_logs():
+    try:
+        logs = [n for n in os.listdir()
+                if n.startswith(config.LOG_PREFIX) and n.endswith(".csv")]
+    except OSError:
+        return []
+    logs.sort(key=_log_num)
+    return logs
+
+
+def next_log_filename():
+    """Next db4_log_NNN.csv, always one above the highest existing number."""
+    logs = _all_logs()
+    highest = _log_num(logs[-1]) if logs else 0
+    return "{}{:03d}.csv".format(config.LOG_PREFIX, highest + 1)
+
+
+def prune_old_logs():
+    """Keep only the newest MAX_LOG_FILES logs so the flash never fills up."""
+    logs = _all_logs()
+    while len(logs) > config.MAX_LOG_FILES:
+        old = logs.pop(0)
+        try:
+            os.remove(old)
+            print("Pruned old log:", old)
+        except OSError:
+            pass
+
+
+def open_new_log():
+    """Start a fresh log file (header written, counter reset, old logs pruned)."""
+    name = next_log_filename()
+    with open(name, "w") as f:
+        f.write(LOG_HEADER)
+    system.state["log_file"] = name
+    system.state["log_rows"] = 0
+    prune_old_logs()
+    print("Logging to:", name)
+    return name
+
+
+def make_watchdog():
+    """Hardware watchdog so a hang reboots the board (recovers on its own)."""
+    if not config.USE_WATCHDOG:
+        return None
+    try:
+        from machine import WDT
+        return WDT(timeout=config.WATCHDOG_TIMEOUT_MS)
+    except Exception as e:
+        print("Watchdog not available:", e)
+        return None
 
 
 def run():
     system.stop_everything()
     time.sleep(2)
-    system.peltier.on()
 
     start_web_server()
+    log_file = open_new_log()
 
     print("=" * 40)
-    print("DB4 FINAL AUTONOMOUS SYSTEM")
+    print("DB4 AUTONOMOUS SYSTEM - running constantly")
     print("Target temperature:", config.TARGET_TEMP, "C")
-    print("Log file:", config.LOG_FILE)
+    print("Hold band: {}-{} C".format(config.LOW_TEMP_LIMIT, config.HIGH_TEMP_LIMIT))
     print("=" * 40)
 
-    with open(config.LOG_FILE, "w") as f:
-        f.write(LOG_HEADER)
-
+    wdt = make_watchdog()
     pid_output = 0.0
     error = 0.0
+    last_od = -1e9
 
     try:
         while True:
-            elapsed = time.time() - system.start_time
-            if elapsed >= config.RUN_TIME_SECONDS:
-                print("Experiment finished.")
-                break
+            if wdt is not None:
+                wdt.feed()
+            try:
+                elapsed = time.time() - system.start_time
+                if config.RUN_TIME_SECONDS and elapsed >= config.RUN_TIME_SECONDS:
+                    print("Run-time limit reached.")
+                    break
 
-            raw, resistance, temp_c = system.read_and_update()
+                raw, resistance, temp_c = system.read_and_update()
 
-            if system.state["mode"] == "auto":
-                # Autonomous control owns the actuators.
-                pid_output, error = system.autonomous_temperature(temp_c)
-                system.bio.update(elapsed)
-            else:
-                # Manual mode: dashboard owns the actuators, do not override.
-                pid_output = system.state["pid_output"]
-                error = 0.0
+                # Read the algae OD sensor periodically (it briefly uses the LED).
+                if time.time() - last_od >= config.OD_SAMPLE_INTERVAL:
+                    system.read_od()
+                    last_od = time.time()
 
-            update_status_led(temp_c)
-            update_oled(temp_c)
+                if system.state["mode"] == "auto":
+                    # Autonomous control owns the actuators.
+                    pid_output, error = system.autonomous_temperature(temp_c)
+                    system.bio.update(elapsed)
+                else:
+                    # Manual mode: dashboard owns the actuators, do not override.
+                    pid_output = system.state["pid_output"]
+                    error = 0.0
 
-            print("t={}s [{}] T={} PWM={} Alg={} Was={} Am={} Wm={}".format(
-                int(elapsed), system.state["mode"],
-                "ERR" if temp_c is None else round(temp_c, 2),
-                system.cooling_pump.duty, system.algae_pump.state,
-                system.waste_pump.state, round(system.bio.Am, 3), round(system.bio.Wm, 3)))
+                update_status_led(temp_c)
+                update_oled(temp_c)
 
-            with open(config.LOG_FILE, "a") as f:
-                log_row(f, elapsed, temp_c, raw, resistance, error, pid_output)
+                print("t={}s [{}] T={} PWM={} Pel={} Alg={} Was={} Am={} Wm={}".format(
+                    int(elapsed), system.state["mode"],
+                    "ERR" if temp_c is None else round(temp_c, 2),
+                    system.cooling_pump.duty, system.peltier.state,
+                    system.algae_pump.state, system.waste_pump.state,
+                    round(system.bio.Am, 3), round(system.bio.Wm, 3)))
+
+                with open(log_file, "a") as f:
+                    log_row(f, elapsed, temp_c, raw, resistance, error, pid_output)
+                system.state["log_rows"] += 1
+
+                # Roll over to a new file when the current one is full.
+                if system.state["log_rows"] >= config.MAX_LOG_ROWS:
+                    log_file = open_new_log()
+
+            except Exception as e:
+                # A transient fault must never stop the bioreactor.
+                print("Loop error (continuing):", e)
 
             time.sleep(config.SAMPLE_TIME)
-
-    except KeyboardInterrupt:
-        print("Stopped by user.")
     finally:
         system.stop_everything()
-        print("DB4 SYSTEM STOPPED SAFELY. Log saved as:", config.LOG_FILE)
+        print("DB4 control loop ended. Last log:", system.state["log_file"])
 
 
 if __name__ == "__main__":
-    run()
+    # Keep the system alive: if run() ever exits unexpectedly, restart it.
+    while True:
+        try:
+            run()
+            break  # only reached if a RUN_TIME_SECONDS limit is configured
+        except KeyboardInterrupt:
+            print("Stopped by user.")
+            try:
+                system.stop_everything()
+            except Exception:
+                pass
+            break
+        except Exception as e:
+            print("run() crashed; restarting in 3 s:", e)
+            try:
+                system.stop_everything()
+            except Exception:
+                pass
+            time.sleep(3)

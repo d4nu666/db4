@@ -1,214 +1,228 @@
 from machine import Pin, PWM, ADC, I2C
 import time
 import math
-import ssd1306
+import sys
 
-# =========================
-# SETTINGS
-# =========================
+# ==================================================
+# DB4 TIMER COOLING TEST
+# OLED shows ONLY:
+#   Temperature
+#   Time
+# ==================================================
 
-TARGET_TEMP = 18.0
-UPDATE_DELAY = 1
-LOG_FILE = "cooling_log.csv"
+# -----------------------------
+# OLED LIBRARY
+# -----------------------------
+try:
+    import ssd1306
+except ImportError:
+    sys.path.append("/firmware/lib")
+    import ssd1306
 
-# =========================
-# PINS
-# =========================
+# ==================================================
+# TEST SETTINGS
+# ==================================================
 
-fan_relay = Pin(17, Pin.OUT)
+TEST_DURATION_MINUTES = 60      # change this to 10, 30, 60, etc.
+SAMPLE_TIME_SECONDS = 2
 
-INA = Pin(18, Pin.OUT)
-INB = Pin(19, Pin.OUT)
-ENA = PWM(Pin(23), freq=1000)
+TARGET_TEMP = 18.0              # only for reference, not PID here
 
-thermistor_adc = ADC(Pin(35))
-thermistor_adc.atten(ADC.ATTN_11DB)
-thermistor_adc.width(ADC.WIDTH_12BIT)
+# ==================================================
+# PIN SETUP - NEW PINS
+# ==================================================
 
-i2c = I2C(0, scl=Pin(22), sda=Pin(21), freq=400000)
-oled = ssd1306.SSD1306_I2C(128, 64, i2c)
+# Thermistor
+THERMISTOR_PIN = 12
 
-# =========================
+# Cooling pump
+# New setup: only PWM GPIO32, no IN1/IN2
+COOLING_PUMP_PWM_PIN = 32
+
+# Peltier / cooling relay
+PELTIER_RELAY_PIN = 16
+
+# OLED
+OLED_SDA = 21
+OLED_SCL = 22
+
+# Safety: keep biological pumps OFF during cooling test
+ALGAE_PUMP_PIN = 23
+WASTE_PUMP_PIN = 19
+
+# ==================================================
+# RELAY LOGIC
+# ==================================================
+# Most relay modules are ACTIVE LOW:
+# 0 = ON
+# 1 = OFF
+#
+# If your relay works reversed, swap these:
+RELAY_ON = 0
+RELAY_OFF = 1
+
+# ==================================================
+# PWM SETTINGS
+# ==================================================
+
+PUMP_FREQ = 1000
+PUMP_PWM_VALUE = 800      # 0 to 1023. Use 700-900 for strong cooling flow.
+
+# ==================================================
 # THERMISTOR SETTINGS
-# =========================
+# ==================================================
 
 SERIES_RESISTOR = 10000
 NOMINAL_RESISTANCE = 10000
-NOMINAL_TEMP = 25
-B_COEFFICIENT = 3950
+NOMINAL_TEMPERATURE = 25
+BETA = 3950
+ADC_MAX = 4095
 
-# =========================
-# FAN RELAY
-# =========================
-# Active LOW relay:
-# 0 = ON
-# 1 = OFF
+# ==================================================
+# HARDWARE INIT
+# ==================================================
 
-def fan_on():
-    fan_relay.value(0)
+# Relay
+peltier_relay = Pin(PELTIER_RELAY_PIN, Pin.OUT)
+peltier_relay.value(RELAY_OFF)
 
-def fan_off():
-    fan_relay.value(1)
+# Cooling pump PWM
+cooling_pump = PWM(Pin(COOLING_PUMP_PWM_PIN), freq=PUMP_FREQ)
+cooling_pump.duty(0)
 
-# =========================
-# PUMP CONTROL
-# =========================
+# Biological pumps OFF
+algae_pump = Pin(ALGAE_PUMP_PIN, Pin.OUT)
+waste_pump = Pin(WASTE_PUMP_PIN, Pin.OUT)
+algae_pump.value(0)
+waste_pump.value(0)
 
-def pump_on(speed=850):
-    INA.value(1)
-    INB.value(0)
-    ENA.duty(speed)
+# Thermistor ADC
+adc = ADC(Pin(THERMISTOR_PIN))
+adc.atten(ADC.ATTN_11DB)
+adc.width(ADC.WIDTH_12BIT)
 
-def pump_off():
-    ENA.duty(0)
-    INA.value(0)
-    INB.value(0)
+# OLED
+i2c = I2C(0, scl=Pin(OLED_SCL), sda=Pin(OLED_SDA), freq=400000)
+oled = ssd1306.SSD1306_I2C(128, 64, i2c)
 
-# =========================
-# TEMPERATURE
-# =========================
+# ==================================================
+# FUNCTIONS
+# ==================================================
 
-def read_adc_average(samples=20):
+def stop_everything():
+    cooling_pump.duty(0)
+    peltier_relay.value(RELAY_OFF)
+    algae_pump.value(0)
+    waste_pump.value(0)
+
+def read_raw_average(samples=20):
     total = 0
     for _ in range(samples):
-        total += thermistor_adc.read()
+        total += adc.read()
         time.sleep_ms(5)
-    return total / samples
+    return total // samples
 
 def read_temperature():
-    adc_value = read_adc_average()
+    raw = read_raw_average()
 
-    if adc_value <= 0:
+    if raw <= 0 or raw >= ADC_MAX:
         return None
 
-    resistance = SERIES_RESISTOR * (4095 / adc_value - 1)
-
-    # If temp goes opposite direction, replace above line with:
-    # resistance = SERIES_RESISTOR / (4095 / adc_value - 1)
+    resistance = SERIES_RESISTOR * raw / (ADC_MAX - raw)
 
     steinhart = resistance / NOMINAL_RESISTANCE
     steinhart = math.log(steinhart)
-    steinhart /= B_COEFFICIENT
-    steinhart += 1.0 / (NOMINAL_TEMP + 273.15)
+    steinhart /= BETA
+    steinhart += 1.0 / (NOMINAL_TEMPERATURE + 273.15)
     steinhart = 1.0 / steinhart
     temp_c = steinhart - 273.15
 
     return temp_c
 
-# =========================
-# TIME FORMAT
-# =========================
-
 def format_time(seconds):
-    minutes = seconds // 60
+    hours = seconds // 3600
+    minutes = (seconds % 3600) // 60
     secs = seconds % 60
-    return "{:02d}:{:02d}".format(minutes, secs)
+    return "{:02d}:{:02d}:{:02d}".format(hours, minutes, secs)
 
-# =========================
-# OLED
-# =========================
-
-def update_oled(temp, elapsed, cooling_active):
+def update_oled(temp, elapsed_seconds):
     oled.fill(0)
 
-    oled.text("COOLING TEST", 0, 0)
+    oled.text("DB4 Cooling Test", 0, 0)
 
     if temp is None:
-        oled.text("Temp: ERROR", 0, 16)
+        oled.text("Temp: ERROR", 0, 22)
     else:
-        oled.text("Temp: {:.1f} C".format(temp), 0, 16)
+        oled.text("Temp: {:.2f} C".format(temp), 0, 22)
 
-    oled.text("Target: 18.0 C", 0, 28)
-    oled.text("Time: " + format_time(elapsed), 0, 40)
-
-    if cooling_active:
-        oled.text("Fan:ON Pump:ON", 0, 52)
-    else:
-        oled.text("Fan:OFF Pump:OFF", 0, 52)
+    oled.text("Time: " + format_time(elapsed_seconds), 0, 42)
 
     oled.show()
 
-# =========================
-# CSV LOGGING
-# =========================
-
-def create_log_file():
-    with open(LOG_FILE, "w") as file:
-        file.write("time_s,temp_c,cooling\n")
-
-def save_log(elapsed, temp, cooling_active):
-    with open(LOG_FILE, "a") as file:
-        if temp is None:
-            temp_text = "ERROR"
-        else:
-            temp_text = "{:.2f}".format(temp)
-
-        cooling_text = "ON" if cooling_active else "OFF"
-
-        file.write("{},{},{}\n".format(elapsed, temp_text, cooling_text))
-
-# =========================
+# ==================================================
 # MAIN TEST
-# =========================
+# ==================================================
 
-def cooling_test():
-    fan_off()
-    pump_off()
-
-    create_log_file()
-
-    start_time = time.time()
-    cooling_active = False
+try:
+    print("DB4 timer cooling test started")
+    print("Duration:", TEST_DURATION_MINUTES, "minutes")
+    print("Thermistor GPIO:", THERMISTOR_PIN)
+    print("Cooling pump PWM GPIO:", COOLING_PUMP_PWM_PIN)
+    print("Peltier relay GPIO:", PELTIER_RELAY_PIN)
 
     oled.fill(0)
-    oled.text("Starting test", 0, 0)
-    oled.text("Saving CSV...", 0, 16)
-    oled.text(LOG_FILE, 0, 28)
+    oled.text("Cooling test", 0, 0)
+    oled.text("Starting...", 0, 25)
     oled.show()
     time.sleep(2)
 
+    # Start cooling
+    peltier_relay.value(RELAY_ON)
+    cooling_pump.duty(PUMP_PWM_VALUE)
+
+    start_time = time.time()
+    duration_seconds = TEST_DURATION_MINUTES * 60
+
     while True:
+        now = time.time()
+        elapsed = now - start_time
+
+        if elapsed >= duration_seconds:
+            break
+
         temp = read_temperature()
-        elapsed = int(time.time() - start_time)
+        update_oled(temp, elapsed)
 
         if temp is None:
-            fan_off()
-            pump_off()
-            cooling_active = False
-
-        elif temp > TARGET_TEMP:
-            fan_on()
-            pump_on(850)
-            cooling_active = True
-
+            print("Time:", format_time(elapsed), "| Temp: ERROR")
         else:
-            fan_off()
-            pump_off()
-            cooling_active = False
+            print("Time:", format_time(elapsed), "| Temp:", round(temp, 2), "C")
 
-        update_oled(temp, elapsed, cooling_active)
-        save_log(elapsed, temp, cooling_active)
+        time.sleep(SAMPLE_TIME_SECONDS)
 
-        print("Time:", elapsed, "Temp:", temp, "Cooling:", cooling_active)
-
-        time.sleep(UPDATE_DELAY)
-
-# =========================
-# SAFE RUN
-# =========================
-
-try:
-    cooling_test()
-
-except KeyboardInterrupt:
-    fan_off()
-    pump_off()
+    stop_everything()
 
     oled.fill(0)
-    oled.text("Test stopped", 0, 0)
-    oled.text("Data saved:", 0, 16)
-    oled.text(LOG_FILE, 0, 28)
+    oled.text("Cooling test", 0, 0)
+    oled.text("Finished", 0, 25)
+    oled.text("Time: " + format_time(duration_seconds), 0, 45)
     oled.show()
 
-    print("Stopped safely")
-    print("Data saved in:", LOG_FILE)
+    print("Cooling test finished. Everything stopped.")
+
+except KeyboardInterrupt:
+    stop_everything()
+    oled.fill(0)
+    oled.text("Test stopped", 0, 0)
+    oled.text("Everything OFF", 0, 25)
+    oled.show()
+    print("Stopped manually. Everything OFF.")
+
+except Exception as e:
+    stop_everything()
+    oled.fill(0)
+    oled.text("ERROR", 0, 0)
+    oled.text("Everything OFF", 0, 25)
+    oled.show()
+    print("Error:", e)
+    print("Everything OFF.")

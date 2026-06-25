@@ -101,6 +101,22 @@ INIT_WA = 0.00
 # ============================================================
 # Run / logging
 # ============================================================
-RUN_TIME_SECONDS = 6 * 60 * 60
+# 0 = run forever (constant operation). Set a positive number of
+# seconds only if you want the system to stop after a fixed time.
+RUN_TIME_SECONDS = 0
 SAMPLE_TIME = 2
-LOG_FILE = "db4_final_log.csv"
+OD_SAMPLE_INTERVAL = 30          # seconds between algae OD sensor reads
+
+# Logging. Each file is a numbered run: db4_log_001.csv, db4_log_002.csv ...
+# To run constantly without filling the flash, a file is capped at
+# MAX_LOG_ROWS samples then rolls over to the next number, and only the
+# newest MAX_LOG_FILES are kept (older ones are auto-deleted).
+LOG_PREFIX = "db4_log_"
+LOG_FILE = "db4_final_log.csv"   # fallback name only
+MAX_LOG_ROWS = 20000             # ~11 h per file at SAMPLE_TIME = 2 s
+MAX_LOG_FILES = 10               # older files auto-deleted to bound flash
+
+# Hardware watchdog: resets the board if the main loop ever hangs, so the
+# system recovers by itself. Set USE_WATCHDOG = False to disable.
+USE_WATCHDOG = True
+WATCHDOG_TIMEOUT_MS = 60000

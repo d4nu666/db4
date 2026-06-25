@@ -19,6 +19,7 @@ import config
 from thermistor import Thermistor
 from pid import CoolingPID
 from bio_model import BioController
+from od_sensor import TCS34725, ODSensor, AlgaeODModel
 import actuators
 
 # ---- hardware singletons (initialised once) ------------------
@@ -32,19 +33,33 @@ led = actuators.StatusLED()
 pid = CoolingPID()
 bio = BioController(algae_pump, waste_pump)
 
-# ---- optional OLED -------------------------------------------
+# ---- I2C bus (shared by OLED + TCS34725 OD sensor) ----------
+i2c = None
 oled = None
+od_sensor = None
+algae_model = AlgaeODModel()
+
 try:
-    import ssd1306
     i2c = I2C(0, scl=Pin(config.I2C_SCL), sda=Pin(config.I2C_SDA), freq=config.I2C_FREQ)
-    oled = ssd1306.SSD1306_I2C(128, 64, i2c)
-    oled.fill(0)
-    oled.text("DB4 System", 0, 0)
-    oled.text("Starting...", 0, 12)
-    oled.show()
 except Exception as e:
-    print("OLED not used:", e)
-    oled = None
+    print("I2C bus not available:", e)
+
+if i2c is not None:
+    try:
+        import ssd1306
+        oled = ssd1306.SSD1306_I2C(128, 64, i2c)
+        oled.fill(0)
+        oled.text("DB4 System", 0, 0)
+        oled.text("Starting...", 0, 12)
+        oled.show()
+    except Exception as e:
+        print("OLED not used:", e)
+        oled = None
+    try:
+        od_sensor = ODSensor(TCS34725(i2c), light=led)
+    except Exception as e:
+        print("OD sensor not used:", e)
+        od_sensor = None
 
 # ---- shared state --------------------------------------------
 start_time = time.time()
@@ -58,8 +73,13 @@ state = {
     "cooling_pwm": config.MIN_COOLING_PWM,
     "algae_pump": False,
     "waste_pump": False,
+    "peltier": False,
+    "algae_od": None,
+    "algae_cells": None,
     "pid_output": 0.0,
     "uptime_s": 0,
+    "log_rows": 0,
+    "log_file": "",
 }
 
 
@@ -122,35 +142,68 @@ def read_and_update():
     raw, resistance, temp_c = thermistor.read()
     state["raw_adc"] = 0 if raw is None else int(raw)
     state["temperature"] = None if temp_c is None else round(temp_c, 2)
+    state["peltier"] = bool(peltier.state)
     state["uptime_s"] = int(time.time() - start_time)
     return raw, resistance, temp_c
 
 
+def read_od():
+    """Read the OD sensor, store algae OD + concentration in state.
+    Returns cells/mL, or None if no sensor is connected."""
+    if od_sensor is None:
+        return None
+    try:
+        data = od_sensor.read_od()
+        od_mean = data["od_mean"]
+        cells = algae_model.od_to_cells_ml(od_mean)
+        state["algae_od"] = round(od_mean, 4)
+        state["algae_cells"] = None if cells is None else int(cells)
+        led.off()          # turn the illumination LED back off
+        return cells
+    except Exception as e:
+        print("OD read error:", e)
+        return None
+
+
+# ---- cooling helpers -----------------------------------------
+def cooling_all_on():
+    """Too hot: turn the Peltier and cooling pump fully on."""
+    peltier.on()
+    state["peltier"] = True
+    cooling_set(config.MAX_COOLING_PWM)
+
+
+def cooling_all_off():
+    """Too cold (or safe stop): turn the Peltier and cooling pump off."""
+    peltier.off()
+    state["peltier"] = False
+    cooling_off()
+
+
 # ---- autonomous temperature control (auto mode only) ---------
 def autonomous_temperature(temp_c):
-    """Cooling PID. Returns (pid_output, error). Updates state."""
-    peltier.on()
+    """Hysteresis (on/off) control to hold the tank in
+    [LOW_TEMP_LIMIT, HIGH_TEMP_LIMIT] (17-18 C):
 
+      temp >= HIGH_TEMP_LIMIT  -> Peltier + pump fully ON  (too hot)
+      temp <= LOW_TEMP_LIMIT   -> Peltier + pump OFF        (too cold)
+      in between               -> hold the current state    (no chatter)
+
+    Returns (output_pct, error).
+    """
     if temp_c is None:
-        cooling_off()
+        cooling_all_off()            # sensor failure -> safe
         state["pid_output"] = 0.0
         return 0.0, 0.0
 
-    if temp_c <= config.PUMP_FORCE_OFF_TEMP:
-        cooling_off()
-        state["pid_output"] = 0.0
-        return 0.0, temp_c - config.TARGET_TEMP
+    error = temp_c - config.TARGET_TEMP
 
-    if temp_c >= config.PUMP_FULL_ON_TEMP:
-        cooling_set(config.MAX_COOLING_PWM)
+    if temp_c >= config.HIGH_TEMP_LIMIT:
+        cooling_all_on()
         state["pid_output"] = 100.0
-        return 100.0, temp_c - config.TARGET_TEMP
+    elif temp_c <= config.LOW_TEMP_LIMIT:
+        cooling_all_off()
+        state["pid_output"] = 0.0
+    # else: inside the 17-18 C band -> leave Peltier/pump as they are
 
-    pid_output, error = pid.update(temp_c)
-    if pid_output <= 0:
-        cooling_off()
-    else:
-        span = config.MAX_COOLING_PWM - config.MIN_COOLING_PWM
-        cooling_set(config.MIN_COOLING_PWM + (pid_output / 100.0) * span)
-    state["pid_output"] = pid_output
-    return pid_output, error
+    return state["pid_output"], error

@@ -28,3 +28,7 @@ db4_final_log.csv
 *.bak
 *.tmp
 *~
+
+RM4_completed.pptx
+*.pptx
+~$*
